@@ -166,7 +166,7 @@ Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widge
 **Non ancora implementato**: sincronizzazione incrementale e coda offline, push, backup giornalieri, sistema dei plugin, cambio/recupero password, modifica o eliminazione di gruppi, materie ed etichette.
 
 **Non verificato**
-- Installazione su UmbrelOS e avvio dell'immagine pubblicata. La build `v0.1.0` (amd64 e arm64) è riuscita su GitHub Actions e il compose dello store la fissa per digest.
+- Installazione su UmbrelOS e avvio dell'immagine pubblicata. La build `v0.1.1` (amd64 e arm64) è riuscita su GitHub Actions e il compose dello store la fissa per digest.
 - `requiresHttps: true` con `manifestVersion: 2.0` presume UmbrelOS 2.x; il cookie `__Host-` richiede HTTPS. Se la tua versione è precedente, va riverificato.
 - Prove su telefoni veri (Safari/iOS compreso), tempo di Argon2id su dispositivi lenti, installazione come PWA, comportamento di `Origin`/`Host` dietro il proxy di Umbrel.
 - Uso con molti utenti contemporanei.

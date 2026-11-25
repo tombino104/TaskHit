@@ -4,7 +4,7 @@ storage:
   dataRoot: data
 category: productivity
 name: TaskHit
-version: "0.1.0"
+version: "0.1.1"
 tagline: Il calendario condiviso della classe
 description: >-
   Al primo avvio apri l'app dalla rete di casa e crea l'account amministratore: il setup è bloccato per chi arriva dal tunnel Cloudflare finché non lo abiliti nella configurazione.
@@ -14,7 +14,7 @@ description: >-
 
 
   La password non lascia mai il dispositivo. Conserva la chiave di recupero che ti viene mostrata alla creazione dell'account: senza di essa e senza la password i dati privati non sono recuperabili.
-releaseNotes: ""
+releaseNotes: "Nuovo logo e nuove icone dell'app."
 
 developer: Lorenzo
 website: https://github.com/tombino104/taskhit
