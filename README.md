@@ -1,6 +1,50 @@
-# TaskHit
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/logo-scuro.svg">
+    <img src="docs/brand/logo-chiaro.svg" alt="TaskHit" width="360">
+  </picture>
+</p>
 
-Calendario scolastico condiviso, per una classe: eventi pubblici, eventi privati cifrati sul dispositivo, ruoli, temi a file singolo. Si ospita da sé (UmbrelOS + Cloudflare Tunnel). **Stato: calendario funzionante** (eventi, ruoli, approvazioni, Inbox, inviti, temi, grafico del carico); notifiche push, backup automatici e installazione di plugin sono in roadmap. Tutti i dettagli, i limiti di sicurezza e ciò che non è stato verificato sono in [`ARCHITETTURA.md`](ARCHITETTURA.md).
+<p align="center">
+  <strong>Il calendario condiviso della classe, da ospitare a casa.</strong><br>
+  Verifiche e interrogazioni per tutti, impegni privati cifrati sul dispositivo.
+</p>
+
+<p align="center">
+  <a href="https://github.com/tombino104/TaskHit/actions/workflows/docker.yml"><img alt="Build dell'immagine" src="https://github.com/tombino104/TaskHit/actions/workflows/docker.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="Licenza PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/licenza-PolyForm%20NC%201.0.0-17171B"></a>
+</p>
+
+![Quattro schermate sul telefono: Oggi, Calendario, Evento e Approvazioni](docs/img/telefono.png)
+
+*Le schermate usano dati di prova con nomi inventati.*
+
+## Cosa fa
+
+- **Calendario** per giorno, settimana e mese, con materie colorate, tipi di evento, filtri e ricerca.
+- **Eventi privati** cifrati sul dispositivo: nemmeno l'amministratore del server li riceve in chiaro.
+- **Ruoli**: admin, rappresentanti, nerd e alunni. Le modifiche dei nerd aspettano un'approvazione.
+- **Inbox** con aggiunte, modifiche ed eliminazioni degli eventi pubblici.
+- **Classi, gruppi e inviti** con conferma dell'amministratore.
+- **Temi** in un singolo file JSON, chiari e scuri.
+- **Consultazione offline** e installazione come app (PWA) su telefono e computer.
+- **Grafico del carico** della settimana.
+
+**In arrivo:** notifiche push, backup automatici, plugin installabili, caricamento dei temi dall'app, cambio e recupero della password.
+
+I limiti di sicurezza e ciò che non è stato verificato sono in [`ARCHITETTURA.md`](ARCHITETTURA.md): leggilo prima di affidare all'app dati veri.
+
+## Sul computer
+
+![Vista della settimana su schermo largo, con barra laterale e grafico del carico](docs/img/computer.png)
+
+## Temi
+
+![La stessa schermata nei temi Carta, Quaderno, Notte e Lavagna](docs/img/temi.png)
+
+## Com'è fatta
+
+Server in **Rust** (Axum, SQLite con SQLCipher) e interfaccia in **Svelte 5** + TypeScript, distribuiti in un'unica immagine Docker.
 
 ## Provarlo in locale
 
@@ -30,10 +74,19 @@ cd web && TASKHIT_E2E_URL=http://127.0.0.1:8080 npx vitest run src/lib/e2e.test.
 
 ## Produzione
 
-- Immagine: `docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/<utente>/taskhit:0.1.0 --push .` (include SQLCipher).
-- Umbrel: copia `umbrel-store/` in un repository pubblico e aggiungilo come store di terze parti; poi installa TaskHit. Sostituisci l'immagine nel compose con quella fissata per digest.
-- Configurazione: `config.example.toml` o variabili `TASKHIT_*`. Crea l'amministratore dalla rete di casa **prima** di esporre il tunnel.
+- **Immagine**: ogni tag `v*` la costruisce con GitHub Actions per `amd64` e `arm64` (SQLCipher incluso) e la pubblica come `ghcr.io/tombino104/taskhit:<versione>`.
+- **Configurazione**: `config.example.toml` o variabili `TASKHIT_*`.
+- **Primo avvio**: crea l'amministratore dalla rete di casa **prima** di esporre il tunnel.
+
+## Installazione su UmbrelOS
+
+> Non ancora provata su un Umbrel vero: vedi [`ARCHITETTURA.md`](ARCHITETTURA.md).
+
+1. Serve un [community app store](https://github.com/getumbrel/umbrel-community-app-store): un repository con `umbrel-app-store.yml` nella radice. Se non ne hai uno, parti dal contenuto di `umbrel-store/`.
+2. Copia nello store la cartella `umbrel-store/tombino104-taskhit/`. Il nome della cartella e l'`id` dell'app devono iniziare con l'`id` dello store.
+3. In UmbrelOS aggiungi lo store e installa TaskHit.
+4. Apri l'app dalla rete di casa, completa la configurazione guidata, poi punta il tunnel Cloudflare all'app e imposta `TASKHIT_PUBLIC_URL`.
 
 ## Licenza
 
-[PolyForm Noncommercial 1.0.0](LICENSE): uso non commerciale libero, niente uso commerciale né rivendita. Non è una licenza open source.
+[PolyForm Noncommercial 1.0.0](LICENSE): il codice è visibile (*source-available*), l'uso non commerciale è libero, l'uso commerciale e la rivendita sono vietati. Non è una licenza open source.

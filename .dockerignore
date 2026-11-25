@@ -4,3 +4,5 @@
 .git
 *.md
 umbrel-store
+docs
+.github

@@ -23,7 +23,11 @@ repo: https://github.com/tombino104/taskhit
 support: https://github.com/tombino104/taskhit/issues
 
 port: 3480
-gallery: []
+icon: https://raw.githubusercontent.com/tombino104/TaskHit/main/web/public/icon-512.png
+gallery:
+  - https://raw.githubusercontent.com/tombino104/TaskHit/main/docs/img/umbrel-1.jpg
+  - https://raw.githubusercontent.com/tombino104/TaskHit/main/docs/img/umbrel-2.jpg
+  - https://raw.githubusercontent.com/tombino104/TaskHit/main/docs/img/umbrel-3.jpg
 path: ""
 requiresHttps: true
 
