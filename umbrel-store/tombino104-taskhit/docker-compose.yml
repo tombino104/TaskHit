@@ -9,8 +9,8 @@ services:
       PROXY_AUTH_ADD: "false"
 
   web:
-    # Dopo il primo push dell'immagine sostituisci con il riferimento fissato: ghcr.io/tombino104/taskhit:0.1.0@sha256:<digest>
-    image: ghcr.io/tombino104/taskhit:0.1.0
+    # Immagine fissata per digest: va aggiornata insieme al numero di versione a ogni release.
+    image: ghcr.io/tombino104/taskhit:0.1.0@sha256:72eaf2f5e2b6e0fdb97295c431f060e3894f8357a9e1dbf976b3b7f9f3b6f683
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 15s
