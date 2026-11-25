@@ -16,7 +16,10 @@ jobs:
         with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
       - id: meta
         uses: docker/metadata-action@v5
-        with: { images: "ghcr.io/${{ github.repository }}" }
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # Il tag git v0.1.0 pubblica l'immagine 0.1.0, quella che cerca il compose di Umbrel.
+          tags: type=semver,pattern={{version}}
       - uses: docker/build-push-action@v6
         with:
           context: .
