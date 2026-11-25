@@ -19,9 +19,13 @@
   import Persone from './lib/schermate/Persone.svelte';
   import Backup from './lib/schermate/Backup.svelte';
   import Cerca from './lib/schermate/Cerca.svelte';
+  import ServeHttps from './lib/schermate/ServeHttps.svelte';
 
   /** Ogni quanto si ricontrolla il server mentre l'app è visibile. */
   const INTERVALLO = 60_000;
+
+  /** In HTTP, fuori da localhost, manca WebCrypto: l'app non può funzionare. */
+  const cifraturaDisponibile = globalThis.crypto?.subtle !== undefined;
 
   let fase = $state<'caricamento' | 'setup' | 'pronta'>('caricamento');
   let kdf = $state<Kdf | null>(null);
@@ -42,6 +46,7 @@
     const timer = setInterval(aggiorna, INTERVALLO);
     (async () => {
       await caricaTemi();
+      if (!cifraturaDisponibile) return;
       try {
         const st = await api.setupStatus();
         kdf = st.kdf;
@@ -71,7 +76,9 @@
   $effect(() => { if (fase === 'pronta' && app.utente && (soloAdmin || sconosciuta)) sostituisci('oggi'); });
 </script>
 
-{#if fase === 'caricamento'}
+{#if !cifraturaDisponibile}
+  <main><ServeHttps /></main>
+{:else if fase === 'caricamento'}
   <main class="schermata"><span class="marchio">TaskHit</span><p class="dato" role="status">Caricamento…</p></main>
 {:else if fase === 'setup'}
   <main><Setup {kdf} onfine={() => { sostituisci('oggi'); fase = 'pronta'; }} /></main>

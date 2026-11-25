@@ -76,7 +76,8 @@ cd web && TASKHIT_E2E_URL=http://127.0.0.1:8080 npx vitest run src/lib/e2e.test.
 
 - **Immagine**: ogni tag `v*` la costruisce con GitHub Actions per `amd64` e `arm64` (SQLCipher incluso) e la pubblica come `ghcr.io/tombino104/taskhit:<versione>`.
 - **Configurazione**: `config.example.toml` o variabili `TASKHIT_*`.
-- **Primo avvio**: crea l'amministratore dalla rete di casa **prima** di esporre il tunnel.
+- **HTTPS obbligatorio**: fuori da `localhost`, in HTTP il browser disattiva la crittografia e l'app mostra «Serve HTTPS».
+- **Primo avvio**: crea subito l'amministratore. Il setup è bloccato per chi arriva dal tunnel Cloudflare, salvo `TASKHIT_ALLOW_REMOTE_SETUP=true`.
 
 ## Installazione su UmbrelOS
 
@@ -85,7 +86,8 @@ cd web && TASKHIT_E2E_URL=http://127.0.0.1:8080 npx vitest run src/lib/e2e.test.
 1. Serve un [community app store](https://github.com/getumbrel/umbrel-community-app-store): un repository con `umbrel-app-store.yml` nella radice. Se non ne hai uno, parti dal contenuto di `umbrel-store/`.
 2. Copia nello store la cartella `umbrel-store/tombino104-taskhit/`. Il nome della cartella e l'`id` dell'app devono iniziare con l'`id` dello store.
 3. In UmbrelOS aggiungi lo store e installa TaskHit.
-4. Apri l'app dalla rete di casa, completa la configurazione guidata, poi punta il tunnel Cloudflare all'app e imposta `TASKHIT_PUBLIC_URL`.
+4. Dai all'app un indirizzo HTTPS (per esempio con un tunnel Cloudflare) e imposta `TASKHIT_PUBLIC_URL`.
+5. Apri quell'indirizzo e completa la configurazione guidata. Se passi dal tunnel, imposta `TASKHIT_ALLOW_REMOTE_SETUP: "true"` solo il tempo di creare l'amministratore, poi toglilo.
 
 ## Licenza
 

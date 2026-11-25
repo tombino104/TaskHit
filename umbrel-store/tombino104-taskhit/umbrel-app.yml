@@ -7,7 +7,7 @@ name: TaskHit
 version: "0.1.1"
 tagline: Il calendario condiviso della classe
 description: >-
-  Al primo avvio apri l'app dalla rete di casa e crea l'account amministratore: il setup è bloccato per chi arriva dal tunnel Cloudflare finché non lo abiliti nella configurazione.
+  Serve un indirizzo HTTPS: aperta in http:// l'app non permette di creare account né di accedere. Al primo avvio crea subito l'account amministratore: il setup è bloccato per chi arriva dal tunnel Cloudflare finché non lo abiliti nella configurazione.
 
 
   TaskHit è un calendario scolastico condiviso: eventi pubblici per tutta la classe, eventi privati cifrati sul tuo dispositivo, inbox delle modifiche, ruoli con approvazione e temi personalizzabili.
