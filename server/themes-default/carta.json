@@ -1,0 +1,16 @@
+{
+  "nome": "Carta",
+  "tipo": "chiaro",
+  "abbinato": "notte",
+  "colori": {
+    "sfondo": "#F1F0EB",
+    "superficie": "#FAFAF7",
+    "inchiostro": "#17171B",
+    "inchiostro2": "#4F4F58",
+    "attenuato": "#6B6B73",
+    "filetto": "#D8D7D0",
+    "accento": "#2C3FD1",
+    "suAccento": "#FFFFFF"
+  },
+  "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
+}

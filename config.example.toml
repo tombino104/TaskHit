@@ -1,0 +1,27 @@
+# Copia questo file in <cartella dati>/config.toml. Ogni voce ha un valore predefinito sensato:
+# scrivi solo cio' che vuoi cambiare. Le variabili d'ambiente TASKHIT_* hanno la precedenza.
+
+[server]
+bind = "0.0.0.0:8080"
+# Indirizzo pubblico dietro il tunnel. Se impostato, le scritture sono accettate solo da questa origine.
+# public_url = "https://taskhit-tombino104.net"
+
+[paths]
+data_dir = "/data"
+web_dir = "/app/web"
+
+[security]
+session_days = 30
+# true con HTTPS (tunnel Cloudflare, o Umbrel 2.0 con HTTPS). false SOLO per prove in locale su http.
+cookie_secure = true
+# Intestazione con l'IP reale del client. Vuota = IP della connessione.
+client_ip_header = "cf-connecting-ip"
+# Il primo amministratore si crea dalla rete locale. Metti true solo se devi farlo attraverso il tunnel.
+allow_remote_setup = false
+api_requests_per_minute = 240
+login_attempts_per_minute_ip = 10
+login_attempts_per_minute_user = 5
+max_body_kb = 256
+request_timeout_secs = 15
+max_in_flight = 256
+max_parallel_hashes = 4

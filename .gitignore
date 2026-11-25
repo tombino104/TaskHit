@@ -1,0 +1,15 @@
+target/
+node_modules/
+dist/
+data/
+# La cartella dati dello store Umbrel deve esistere nel repository (solo il segnaposto).
+!umbrel-store/tombino104-taskhit/data/
+umbrel-store/tombino104-taskhit/data/app/*
+!umbrel-store/tombino104-taskhit/data/app/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+config.toml
+.env
+.DS_Store
+.svelte-check/

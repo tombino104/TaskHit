@@ -1,0 +1,16 @@
+{
+  "nome": "Notte",
+  "tipo": "scuro",
+  "abbinato": "carta",
+  "colori": {
+    "sfondo": "#131316",
+    "superficie": "#1C1C21",
+    "inchiostro": "#ECEBE6",
+    "inchiostro2": "#B4B3BA",
+    "attenuato": "#8F8E97",
+    "filetto": "#2F2F36",
+    "accento": "#8F9BFF",
+    "suAccento": "#131316"
+  },
+  "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
+}
