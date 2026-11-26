@@ -1,0 +1,36 @@
+# Pubblica la release su GitHub quando l'immagine di un tag è stata costruita con successo.
+# Le note stanno in docs/rilasci/<tag>.md (sul ramo principale); se mancano, le genera GitHub.
+name: release
+on:
+  workflow_run:
+    workflows: [immagine-docker]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da pubblicare, es. v0.2.0"
+        required: true
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Crea la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Passato come variabile: il nome del tag non entra mai nel testo dello script.
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "La release $TAG esiste già."
+            exit 0
+          fi
+          notes="docs/rilasci/$TAG.md"
+          if [ -f "$notes" ]; then
+            gh release create "$TAG" --verify-tag --title "TaskHit ${TAG#v}" --notes-file "$notes"
+          else
+            gh release create "$TAG" --verify-tag --title "TaskHit ${TAG#v}" --generate-notes
+          fi
