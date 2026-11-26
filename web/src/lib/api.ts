@@ -11,8 +11,8 @@ async function call<T>(method: string, path: string, body?: unknown, keepalive =
       method,
       credentials: 'same-origin',
       keepalive,
-      headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: body === undefined ? undefined : { 'content-type': body instanceof Blob ? 'application/octet-stream' : 'application/json' },
+      body: body === undefined || body instanceof Blob ? body : JSON.stringify(body),
     });
   } catch {
     throw new ApiError(0, 'Server non raggiungibile.');
@@ -87,7 +87,14 @@ export interface InAttesa { id: string; username: string; display_name: string; 
 export interface Invito { id: string; code: string; group_id: string; expires_at: number; uses: number }
 export interface StatoAdmin {
   encrypted_at_rest: boolean; login_attempts_per_minute: number; remote_setup_blocked: boolean;
-  origin_pinned: boolean; backups_dir: string;
+  origin_pinned: boolean;
+}
+
+export interface ImpostazioniBackup { enabled: boolean; /** 1 = lunedì … 7 = domenica */ days: number[]; time: string; keep: number }
+export interface Backup { name: string; kind: 'auto' | 'manuale' | 'caricato' | 'sicurezza'; created_at: number; size: number }
+export interface StatoBackup {
+  settings: ImpostazioniBackup; timezone: string; next: number | null; error: string | null;
+  copy: { active: boolean; latest_copied: boolean }; items: Backup[]; dir: string;
 }
 
 type Ok = { ok: boolean };
@@ -111,6 +118,15 @@ export const api = {
   salvaImpostazioni: (b: Partial<Impostazioni>) => call<Ok>('PUT', '/api/settings', b),
   salvaPlugin: (plugin: string, scope: 'user' | 'instance', enabled: boolean) => call<Ok>('PUT', `/api/plugins/${id(plugin)}`, { scope, enabled }),
   statoAdmin: () => call<StatoAdmin>('GET', '/api/admin/status'),
+
+  backup: () => call<StatoBackup>('GET', '/api/backups'),
+  backupAdesso: () => call<Backup>('POST', '/api/backups', {}),
+  salvaBackup: (b: ImpostazioniBackup) => call<Ok>('PUT', '/api/backups/settings', b),
+  scaricaBackup: (name: string) => `/api/backups/${id(name)}`,
+  eliminaBackup: (name: string) => call<Ok>('POST', `/api/backups/${id(name)}/delete`, {}),
+  ripristinaBackup: (name: string, auth_key: string) => call<Ok>('POST', `/api/backups/${id(name)}/restore`, { auth_key }),
+  caricaBackup: (file: Blob) => call<Backup>('POST', '/api/backups/upload', file),
+  ripristinaAlPrimoAvvio: (file: Blob) => call<Ok>('POST', '/api/setup/restore', file),
 
   eventi: () => call<{ events: EventoServer[] }>('GET', '/api/events'),
   creaPubblico: (data: DatiPubblici, note?: string) =>

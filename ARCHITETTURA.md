@@ -110,7 +110,15 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 | `GET /api/meta`, `POST /api/tags`, `POST /api/labels`, `PUT /api/settings`, `PUT /api/plugins/{id}` | materie, etichette, gruppi, impostazioni |
 | `GET /api/users`, `PATCH …/{id}`, `POST …/accept`, `…/reject`, `POST /api/groups` | persone e gruppi (admin) |
 | `GET /api/invites`, `POST /api/invites`, `POST …/revoke`, `POST /api/join` | inviti; chi si iscrive resta in attesa dell'admin |
+| `GET /api/backups`, `POST /api/backups`, `PUT …/settings`, `GET …/{nome}`, `POST …/{nome}/delete`, `…/restore`, `POST …/upload`, `POST /api/setup/restore` | backup e ripristino (admin; l'ultimo solo su un'installazione vuota) |
 | `GET /api/me`, `PATCH /api/me`, `POST /api/me/sessions/revoke-others`, `GET /api/admin/status` | profilo e stato del server |
+
+## Backup
+
+- Un backup è un `.tar` autosufficiente: `manifest.json`, copia coerente del database (`VACUUM INTO`, cifrata se si usa SQLCipher), `db.key` e temi. L'elenco è il contenuto della cartella, non la tabella `backups` (non usata).
+- Pianificazione (giorni, ora nel fuso dell'istanza, quanti conservarne) nelle `settings`; il server controlla ogni minuto e recupera l'ultimo orario saltato. L'eliminazione dei vecchi avviene solo quando ne nasce uno nuovo.
+- Ripristino: l'archivio è controllato in una cartella di lavoro privata (si leggono solo le voci previste, `integrity_check`, schema non più recente, almeno un admin, migrazioni), poi il contenuto sostituisce il database attivo in un'unica transazione (API di backup di SQLite). La chiave dell'installazione resta la sua, le sessioni vengono chiuse. Dall'admin richiede la password e salva prima una copia di sicurezza.
+- Limiti: il file caricato non può superare 64 MB; la copia esterna non è verificata né sfoltita; il contenuto dell'archivio non è protetto da una password propria.
 
 ## 6. Ruoli
 
@@ -155,18 +163,19 @@ Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widge
 ## 10. Stato dell'implementazione
 
 **Fatto e verificato** (novembre 2026, su macOS arm64)
-- Server: tutto ciò che c'era più eventi, proposte, Inbox, persone, gruppi, inviti, impostazioni. 20 test di integrazione e 1 unitario passati, anche con `--features sqlcipher`.
+- Server: tutto ciò che c'era più eventi, proposte, Inbox, persone, gruppi, inviti, impostazioni. più backup e ripristino. 24 test di integrazione e 4 unitari passati, anche con `--features sqlcipher`.
 - Client: tutte le schermate del design (Oggi, Calendario giorno/settimana/mese, vista larga con barra laterale, Filtri, Evento, Nuovo evento, Inbox, Approvazioni, Profilo, Aspetto, Plugin, Persone, Backup, Setup guidato) più accesso, iscrizione e ricerca. 22 test, controllo dei tipi senza errori, build PWA.
 - Test end-to-end del client contro il server: passato.
 - Nel browser, contro un server locale con dati di prova: setup in cinque passi, accesso, creazione di un evento privato, blocco e sblocco (anche a server spento), approvazione con «Annulla», accettazione di un iscritto, temi chiaro e scuro, 390 px e 1440 px.
+- Backup: creazione, scaricamento, password errata e ripristino nel browser; ripristino su un server locale vuoto.
 - Corretti due difetti che nel browser impedivano l'uso: la CSP bloccava WebAssembly (quindi setup e accesso) e i font incorporati come `data:`.
 
-**Presente nell'interfaccia ma non funzionante** (comandi disattivati e indicati «in arrivo»): notifiche push, backup, caricamento di un tema, installazione di plugin, foto profilo. Gli avvisi di un evento si salvano ma non inviano nulla.
+**Presente nell'interfaccia ma non funzionante** (comandi disattivati e indicati «in arrivo»): notifiche push, caricamento di un tema, installazione di plugin, foto profilo. Gli avvisi di un evento si salvano ma non inviano nulla.
 
-**Non ancora implementato**: sincronizzazione incrementale e coda offline, push, backup giornalieri, sistema dei plugin, cambio/recupero password, modifica o eliminazione di gruppi, materie ed etichette.
+**Non ancora implementato**: sincronizzazione incrementale e coda offline, push, sistema dei plugin, cambio/recupero password, modifica o eliminazione di gruppi, materie ed etichette.
 
 **Non verificato**
-- Installazione su UmbrelOS e avvio dell'immagine pubblicata. La build `v0.1.2` (amd64 e arm64) è riuscita su GitHub Actions e il compose dello store la fissa per digest.
+- Su un Umbrel vero la 0.1.2 è installata e raggiungibile dal tunnel. Restano da provare lì i backup e la cartella per la seconda copia.
 - `requiresHttps: true` con `manifestVersion: 2.0` presume UmbrelOS 2.x; il cookie `__Host-` richiede HTTPS. Se la tua versione è precedente, va riverificato.
 - Prove su telefoni veri (Safari/iOS compreso), tempo di Argon2id su dispositivi lenti, installazione come PWA, comportamento di `Origin`/`Host` dietro il proxy di Umbrel.
 - Uso con molti utenti contemporanei.
@@ -179,11 +188,10 @@ PolyForm Noncommercial 1.0.0: consente uso, modifica e distribuzione per scopi n
 
 1. **Sync** incrementale e live (SSE), coda offline, risoluzione dei conflitti.
 2. **Push** (VAPID) e promemoria.
-3. **Backup** giornalieri con ricorrenza scelta dall'admin e rimozione dei più vecchi.
-4. Cambio/recupero password, rotazione della chiave di recupero.
-5. Gestione di gruppi, materie ed etichette; foto profilo; caricamento dei temi.
-6. Sistema dei **plugin**.
-7. Idee future: widget desktop, consigliere «giorno troppo carico», sincronizzazione con calendari nativi.
+3. Cambio/recupero password, rotazione della chiave di recupero.
+4. Gestione di gruppi, materie ed etichette; foto profilo; caricamento dei temi.
+5. Sistema dei **plugin**.
+6. Idee future: widget desktop, consigliere «giorno troppo carico», sincronizzazione con calendari nativi.
 
 ## 13. Rischi aperti
 

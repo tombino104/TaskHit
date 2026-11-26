@@ -21,6 +21,8 @@ services:
     environment:
       TASKHIT_DATA_DIR: /data
       TASKHIT_COOKIE_SECURE: "true"
+      # Seconda copia dei backup: esiste solo se scegli una cartella nelle impostazioni dell'app su Umbrel.
+      TASKHIT_BACKUP_COPY_DIR: /copie
       # TASKHIT_PUBLIC_URL: "https://taskhit-tombino104.net"
     volumes:
       - ${APP_DATA_DIR}/data/app:/data

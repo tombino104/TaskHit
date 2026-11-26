@@ -1,5 +1,6 @@
 pub mod api;
 pub mod auth;
+pub mod backup;
 pub mod common;
 pub mod config;
 pub mod db;
@@ -14,7 +15,7 @@ pub mod state;
 pub mod themes;
 pub mod web;
 
-use axum::{Router, http::StatusCode, middleware::from_fn_with_state, response::IntoResponse};
+use axum::{Router, extract::DefaultBodyLimit, http::StatusCode, middleware::from_fn_with_state, response::IntoResponse};
 use config::Config;
 use state::AppState;
 use std::{sync::Arc, time::Duration};
@@ -30,6 +31,7 @@ use tower_http::{
 /// Prepara cartelle, segreti, database (con migrazioni) e temi predefiniti.
 pub fn build_state(cfg: Config) -> anyhow::Result<AppState> {
     std::fs::create_dir_all(&cfg.paths.data_dir)?;
+    backup::clean_leftovers(&cfg.paths.data_dir);
     let secrets_dir = cfg.secrets_dir();
     let server_key = secrets::load_or_create(&secrets_dir, "server.key")?;
 
@@ -52,6 +54,7 @@ pub fn build_state(cfg: Config) -> anyhow::Result<AppState> {
         server_key: Arc::new(server_key),
         dummy_hash: Arc::new(dummy_hash),
         db,
+        backup_lock: Arc::default(),
         cfg: Arc::new(cfg),
     })
 }
@@ -78,10 +81,14 @@ pub fn router(state: AppState) -> Router {
 
     // Il primo layer e' il piu' interno; l'ultimo e' il primo a vedere la richiesta.
     let app = Router::new()
-        .nest("/api", api::routes())
+        .nest(
+            "/api",
+            api::routes()
+                .layer(RequestBodyLimitLayer::new(sec.max_body_kb * 1024))
+                .merge(backup::upload_routes().layer(DefaultBodyLimit::max(backup::MAX_UPLOAD_BYTES)).layer(RequestBodyLimitLayer::new(backup::MAX_UPLOAD_BYTES))),
+        )
         .fallback_service(spa)
         .layer(from_fn_with_state(state.clone(), web::origin_guard))
-        .layer(RequestBodyLimitLayer::new(sec.max_body_kb * 1024))
         .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(sec.request_timeout_secs)))
         .layer(axum::middleware::from_fn(web::cache_headers))
         .layer(CompressionLayer::new())

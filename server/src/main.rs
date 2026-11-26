@@ -31,6 +31,20 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
+    // Backup automatici: si controlla ogni minuto, e subito all'avvio per recuperare quelli persi.
+    let backups = state.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            tick.tick().await;
+            match taskhit_server::backup::run_due(&backups).await {
+                Ok(Some(item)) => tracing::info!("backup automatico creato: {}", item.name),
+                Ok(None) => {}
+                Err(e) => tracing::error!("backup automatico non riuscito: {e:?}"),
+            }
+        }
+    });
+
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!("TaskHit {} in ascolto su {bind}", env!("CARGO_PKG_VERSION"));
     axum::serve(listener, router(state).into_make_service_with_connect_info::<SocketAddr>())

@@ -233,6 +233,17 @@ export async function eliminaEvento(e: Evento, nota?: string) {
   return esito.status;
 }
 
+// --- Backup ---
+/** Ripristina un backup. Serve la password; dopo, tutti i dispositivi devono accedere di nuovo. */
+export async function ripristina(nome: string, password: string): Promise<void> {
+  const utente = app.utente;
+  if (!utente) return;
+  const pre = await api.prelogin(utente.username);
+  const { authKey } = await C.deriveKeys(password, C.b64.dec(pre.kdf_salt), pre.kdf);
+  await api.ripristinaBackup(nome, authKey);
+  dimentica(); // i dati sul dispositivo appartengono allo stato di prima
+}
+
 // --- Profilo cifrato ---
 export interface Profilo { compleanno?: string }
 export async function leggiProfilo(): Promise<Profilo | null> {

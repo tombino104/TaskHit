@@ -15,6 +15,8 @@ pub struct AppState {
     pub inflight: Arc<Semaphore>,
     /// Calcoli Argon2 contemporanei: limitano la RAM usata da chi manda molti login.
     pub hash_slots: Arc<Semaphore>,
+    /// Un solo backup o ripristino alla volta.
+    pub backup_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// Indirizzo del client, calcolato una volta per richiesta dal middleware `guard`.

@@ -281,6 +281,5 @@ async fn admin_status(State(st): State<AppState>, user: AuthUser) -> Result<Json
         "login_attempts_per_minute": s.login_attempts_per_minute_user,
         "remote_setup_blocked": !s.allow_remote_setup && !s.client_ip_header.is_empty(),
         "origin_pinned": st.cfg.server.public_url.is_some(),
-        "backups_dir": st.cfg.backups_dir().display().to_string(),
     })))
 }

@@ -7,7 +7,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use taskhit_server::{auth, build_state, config::Config, router, themes};
+use taskhit_server::{auth, backup, build_state, config::Config, router, themes};
 use tower::ServiceExt;
 
 fn app(tweak: impl FnOnce(&mut Config)) -> (Router, PathBuf) {
@@ -585,4 +585,175 @@ async fn event_fields_are_validated() {
     }
     let (s, _) = c.post("/api/tags", json!({"name":"Fisica","color":"red"}), &c.admin).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+}
+
+// --- Backup e ripristino ---------------------------------------------------------------------
+
+async fn send_bytes(app: &Router, uri: &str, bytes: Vec<u8>, extra: &[(&str, &str)]) -> (StatusCode, Value) {
+    let mut req = Request::builder().method(Method::POST).uri(uri).header(header::HOST, "localhost").header(header::CONTENT_TYPE, "application/octet-stream");
+    for (k, v) in extra {
+        req = req.header(*k, *v);
+    }
+    let res = app.clone().oneshot(req.body(Body::from(bytes)).unwrap()).await.unwrap();
+    let status = res.status();
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&body).unwrap_or(Value::Null))
+}
+
+async fn download(app: &Router, name: &str, cookie: &str) -> (StatusCode, Vec<u8>) {
+    let req = Request::builder().uri(format!("/api/backups/{name}")).header(header::HOST, "localhost").header("cookie", cookie).body(Body::empty()).unwrap();
+    let res = app.clone().oneshot(req).await.unwrap();
+    let status = res.status();
+    (status, res.into_body().collect().await.unwrap().to_bytes().to_vec())
+}
+
+async fn admin_cookie(app: &Router) -> String {
+    let (s, h, body) = send(app, Method::POST, "/api/setup", Some(setup_body("lorenzo", 1)), &[]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    cookie_of(&h)
+}
+
+async fn tag_names(app: &Router, cookie: &str) -> Vec<String> {
+    let (s, _, meta) = send(app, Method::GET, "/api/meta", None, &[("cookie", cookie)]).await;
+    assert_eq!(s, StatusCode::OK, "{meta}");
+    meta["tags"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect()
+}
+
+async fn add_tag(app: &Router, cookie: &str, name: &str) {
+    let (s, _, body) = send(app, Method::POST, "/api/tags", Some(json!({"name": name, "color": "#112233"})), &[("cookie", cookie)]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+}
+
+async fn backup_now(app: &Router, cookie: &str) -> String {
+    let (s, _, item) = send(app, Method::POST, "/api/backups", Some(json!({})), &[("cookie", cookie)]).await;
+    assert_eq!(s, StatusCode::OK, "{item}");
+    item["name"].as_str().unwrap().to_owned()
+}
+
+async fn login_cookie(app: &Router) -> String {
+    let (s, h, body) = send(app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(1)})), &[]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    cookie_of(&h)
+}
+
+#[tokio::test]
+async fn backup_and_restore_bring_data_back() {
+    let (app, dir) = app(|_| {});
+    let cookie = admin_cookie(&app).await;
+    add_tag(&app, &cookie, "Prima").await;
+    std::fs::write(dir.join("themes/mio.json"), b"{\"nome\":\"Mio\"}").unwrap();
+    let name = backup_now(&app, &cookie).await;
+    add_tag(&app, &cookie, "Dopo").await;
+    std::fs::remove_file(dir.join("themes/mio.json")).unwrap();
+
+    // Senza la password giusta non si ripristina nulla.
+    let uri = format!("/api/backups/{name}/restore");
+    let (s, _, _) = send(&app, Method::POST, &uri, Some(json!({"auth_key":key(9)})), &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert!(tag_names(&app, &cookie).await.contains(&"Dopo".to_owned()));
+
+    let (s, _, body) = send(&app, Method::POST, &uri, Some(json!({"auth_key":key(1)})), &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    let (s, _, _) = send(&app, Method::GET, "/api/me", None, &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "dopo il ripristino si accede di nuovo");
+
+    let cookie = login_cookie(&app).await;
+    let tags = tag_names(&app, &cookie).await;
+    assert!(tags.contains(&"Prima".to_owned()) && !tags.contains(&"Dopo".to_owned()), "{tags:?}");
+    assert!(dir.join("themes/mio.json").exists(), "tornano anche i temi");
+    // La copia di sicurezza contiene lo stato di prima del ripristino, e il database resta scrivibile.
+    let (_, _, list) = send(&app, Method::GET, "/api/backups", None, &[("cookie", &cookie)]).await;
+    assert!(list["items"].as_array().unwrap().iter().any(|i| i["name"] == body["safety"] && i["kind"] == "sicurezza"), "{list}");
+    add_tag(&app, &cookie, "Ancora").await;
+    let leftovers = std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().starts_with(".lavoro-")).count();
+    assert_eq!(leftovers, 0, "nessun file di lavoro con le chiavi lasciato in giro");
+}
+
+#[tokio::test]
+async fn a_downloaded_backup_restores_a_fresh_install() {
+    let (old, _d1) = app(|_| {});
+    let cookie = admin_cookie(&old).await;
+    add_tag(&old, &cookie, "Salvata").await;
+    let name = backup_now(&old, &cookie).await;
+    let (s, bytes) = download(&old, &name, &cookie).await;
+    assert_eq!(s, StatusCode::OK);
+    // Con SQLCipher anche la copia dentro l'archivio deve essere cifrata (senza, e' SQLite in chiaro).
+    let plain = bytes.windows(15).any(|w| w == b"SQLite format 3");
+    assert_eq!(plain, !cfg!(feature = "sqlcipher"));
+
+    // Installazione nuova, con chiavi diverse. Dal tunnel non si puo'.
+    let (new, dir) = app(|_| {});
+    let (s, _) = send_bytes(&new, "/api/setup/restore", bytes.clone(), &[("cf-connecting-ip", "203.0.113.9")]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _) = send_bytes(&new, "/api/setup/restore", b"non un backup".to_vec(), &[]).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, body) = send_bytes(&new, "/api/setup/restore", bytes.clone(), &[]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    let cookie = login_cookie(&new).await;
+    assert!(tag_names(&new, &cookie).await.contains(&"Salvata".to_owned()));
+    let (s, _) = send_bytes(&new, "/api/setup/restore", bytes.clone(), &[]).await;
+    assert_eq!(s, StatusCode::CONFLICT, "solo su un'installazione vuota");
+
+    // Dopo un riavvio il database ripristinato si apre con la chiave di questa installazione.
+    drop(new);
+    let mut cfg = Config::default();
+    cfg.paths.data_dir = dir;
+    cfg.security.cookie_secure = false;
+    let again = router(build_state(cfg).expect("riapertura"));
+    let cookie = login_cookie(&again).await;
+    assert!(tag_names(&again, &cookie).await.contains(&"Salvata".to_owned()));
+    let (s, item) = send_bytes(&again, "/api/backups/upload", bytes, &[("cookie", &cookie)]).await;
+    assert_eq!((s, item["kind"].clone()), (StatusCode::OK, json!("caricato")), "{item}");
+}
+
+#[tokio::test]
+async fn backups_are_for_the_admin_only_and_names_cannot_escape() {
+    let (app, _dir) = app(|_| {});
+    let cookie = admin_cookie(&app).await;
+    let name = backup_now(&app, &cookie).await;
+    for (method, uri) in [(Method::GET, "/api/backups".to_owned()), (Method::GET, format!("/api/backups/{name}")), (Method::POST, "/api/backups".to_owned())] {
+        let (s, _, _) = send(&app, method, &uri, None, &[]).await;
+        assert_eq!(s, StatusCode::UNAUTHORIZED, "{uri}");
+    }
+    let (s, _) = send_bytes(&app, "/api/backups/upload", vec![0; 10], &[]).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+    let (s, _) = download(&app, "..%2Fsecrets%2Fdb.key", &cookie).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _, _) = send(&app, Method::POST, &format!("/api/backups/{name}/delete"), Some(json!({})), &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::OK);
+    let (s, _) = download(&app, &name, &cookie).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn automatic_backups_run_once_per_slot_keep_the_newest_and_are_copied_outside() {
+    let outside = std::env::temp_dir().join(format!("taskhit-copie-{}", auth::random_hex(8)));
+    std::fs::create_dir_all(&outside).unwrap();
+    let dir = std::env::temp_dir().join(format!("taskhit-test-{}", auth::random_hex(8)));
+    let mut cfg = Config::default();
+    cfg.paths.data_dir = dir.clone();
+    cfg.paths.backup_copy_dir = Some(outside.clone());
+    cfg.security.cookie_secure = false;
+    let state = build_state(cfg).unwrap();
+    let app = router(state.clone());
+
+    assert!(backup::run_due(&state).await.unwrap().is_none(), "senza utenti non c'e' nulla da salvare");
+    let cookie = admin_cookie(&app).await;
+    let first = backup::run_due(&state).await.unwrap().expect("il primo parte subito");
+    assert!(backup::run_due(&state).await.unwrap().is_none(), "uno solo per orario programmato");
+    assert!(outside.join(&first.name).is_file());
+
+    let bad = json!({"enabled": true, "days": [], "time": "03:00", "keep": 2});
+    let (s, _, _) = send(&app, Method::PUT, "/api/backups/settings", Some(bad), &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let good = json!({"enabled": false, "days": [1, 5], "time": "18:30", "keep": 2});
+    let (s, _, body) = send(&app, Method::PUT, "/api/backups/settings", Some(good), &[("cookie", &cookie)]).await;
+    assert_eq!(s, StatusCode::OK, "{body}");
+    for _ in 0..3 {
+        backup_now(&app, &cookie).await;
+    }
+    let (_, _, list) = send(&app, Method::GET, "/api/backups", None, &[("cookie", &cookie)]).await;
+    assert_eq!(list["items"].as_array().unwrap().len(), 2, "{list}");
+    assert_eq!(list["next"], Value::Null, "spenti: nessun prossimo orario");
+    assert_eq!(list["copy"]["latest_copied"], json!(true));
 }

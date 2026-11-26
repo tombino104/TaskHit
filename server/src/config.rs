@@ -22,6 +22,8 @@ pub struct PathsCfg {
     pub data_dir: PathBuf,
     /// Cartella dell'interfaccia web gia' compilata.
     pub web_dir: PathBuf,
+    /// Se la cartella esiste, ogni backup vi viene anche copiato (meglio su un altro disco).
+    pub backup_copy_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -64,7 +66,7 @@ impl Default for ServerCfg {
 
 impl Default for PathsCfg {
     fn default() -> Self {
-        Self { data_dir: "./data".into(), web_dir: "./web".into() }
+        Self { data_dir: "./data".into(), web_dir: "./web".into(), backup_copy_dir: None }
     }
 }
 
@@ -120,6 +122,7 @@ impl Config {
         if let Some(v) = env("TASKHIT_PUBLIC_URL") { cfg.server.public_url = Some(v); }
         if let Some(v) = data_dir_hint { cfg.paths.data_dir = v; }
         if let Some(v) = env("TASKHIT_WEB_DIR") { cfg.paths.web_dir = v.into(); }
+        if let Some(v) = env("TASKHIT_BACKUP_COPY_DIR") { cfg.paths.backup_copy_dir = Some(v.into()); }
         if let Some(v) = env_bool("TASKHIT_COOKIE_SECURE")? { cfg.security.cookie_secure = v; }
         if let Some(v) = env_bool("TASKHIT_ALLOW_REMOTE_SETUP")? { cfg.security.allow_remote_setup = v; }
         if let Some(v) = std::env::var("TASKHIT_CLIENT_IP_HEADER").ok() { cfg.security.client_ip_header = v; }

@@ -8,6 +8,7 @@
   import { api, type Invito, type Kdf, type StatoAdmin } from '../api';
   import { app, avvisa, messaggio, preparaChiavi, sincronizza, usaChiave } from '../store.svelte';
   import { codiceLeggibile, linkInvito } from '../inviti';
+  import { sostituisci } from '../router.svelte';
 
   let { kdf, onfine }: { kdf: Kdf | null; onfine: () => void } = $props();
 
@@ -52,6 +53,20 @@
     password = password2 = '';
     chiave = k.recupero;
     await sincronizza();
+  }
+
+  /** Al posto di un'installazione nuova: si riparte da un backup scaricato in precedenza. */
+  async function daBackup(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    errore = ''; occupato = true;
+    try {
+      await api.ripristinaAlPrimoAvvio(file);
+      sostituisci('accesso');
+      location.reload();
+    } catch (e) { errore = messaggio(e); occupato = false; }
   }
 
   async function caricaInviti() {
@@ -161,10 +176,15 @@
             <Interruttore nome="Dati cifrati sul disco" descrizione={stato.encrypted_at_rest ? 'Il database è cifrato con SQLCipher' : 'Questa build non cifra il database; gli eventi privati restano cifrati'} attivo={stato.encrypted_at_rest} disabilitato />
             <Interruttore nome="Protezione da abusi" descrizione="Al massimo {stato.login_attempts_per_minute} tentativi di accesso al minuto per utente" attivo disabilitato />
             <Interruttore nome="Origine bloccata sul tunnel" descrizione={stato.origin_pinned ? 'Le modifiche arrivano solo dall’indirizzo pubblico' : 'Imposta TASKHIT_PUBLIC_URL per attivarla'} attivo={stato.origin_pinned} disabilitato />
-            <div class="backup"><span class="voce"><span>Backup automatici</span><span class="nota">In arrivo. Per ora salva la cartella dei dati.</span></span></div>
+            <div class="backup"><span class="voce"><span>Backup automatici</span><span class="nota">Attivi: ogni notte alle 03:00, conservando gli ultimi 14. Li cambi in Profilo, Backup.</span></span></div>
           </div>
         {/if}
         {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
+        {#if passo === 1}
+          <label class="collegamento ripristino">Hai un backup? Ripristinalo
+            <input class="nascosto" type="file" accept=".tar,application/x-tar" disabled={occupato} onchange={daBackup} />
+          </label>
+        {/if}
       </form>
     </div>
 
@@ -222,6 +242,8 @@
   footer .pulsante { flex: 1; max-width: 220px; }
   .indietro { min-height: 52px; padding: 0 6px; font-size: 15px; }
   .breve { gap: 18px; }
+  .ripristino { align-self: center; cursor: pointer; }
+  .ripristino:focus-within { outline: 2px solid var(--accento); outline-offset: 2px; }
   .colore { display: flex; align-items: center; justify-content: space-between; }
   .colore input { width: 64px; height: 44px; padding: 2px; border: 1px solid var(--filetto); background: var(--superficie); }
 </style>

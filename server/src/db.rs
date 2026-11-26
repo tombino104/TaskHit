@@ -15,6 +15,9 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/002_calendario.sql"),
 ];
 
+/// Versione dello schema che questa build conosce.
+pub const SCHEMA_VERSION: usize = MIGRATIONS.len();
+
 #[derive(Clone)]
 pub struct Db(Arc<Mutex<Connection>>);
 
@@ -50,7 +53,7 @@ impl Db {
 }
 
 #[cfg(feature = "sqlcipher")]
-fn apply_key(conn: &Connection, key: Option<&[u8; 32]>) -> anyhow::Result<()> {
+pub(crate) fn apply_key(conn: &Connection, key: Option<&[u8; 32]>) -> anyhow::Result<()> {
     let key = key.context("compilato con sqlcipher ma senza chiave del database")?;
     conn.pragma_update(None, "key", format!("x'{}'", hex::encode(key)))?;
     // Se la chiave e' sbagliata o il file non e' cifrato, questa query fallisce subito.
@@ -60,7 +63,7 @@ fn apply_key(conn: &Connection, key: Option<&[u8; 32]>) -> anyhow::Result<()> {
 }
 
 #[cfg(not(feature = "sqlcipher"))]
-fn apply_key(_conn: &Connection, _key: Option<&[u8; 32]>) -> anyhow::Result<()> {
+pub(crate) fn apply_key(_conn: &Connection, _key: Option<&[u8; 32]>) -> anyhow::Result<()> {
     Ok(())
 }
 

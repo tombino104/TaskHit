@@ -30,7 +30,7 @@
 - **Consultazione offline** e installazione come app (PWA) su telefono e computer.
 - **Grafico del carico** della settimana.
 
-**In arrivo:** notifiche push, backup automatici, plugin installabili, caricamento dei temi dall'app, cambio e recupero della password.
+**In arrivo:** notifiche push, plugin installabili, caricamento dei temi dall'app, cambio e recupero della password.
 
 I limiti di sicurezza e ciò che non è stato verificato sono in [`ARCHITETTURA.md`](ARCHITETTURA.md): leggilo prima di affidare all'app dati veri.
 
@@ -88,6 +88,14 @@ cd web && TASKHIT_E2E_URL=http://127.0.0.1:8080 npx vitest run src/lib/e2e.test.
 3. In UmbrelOS aggiungi lo store e installa TaskHit.
 4. Dai all'app un indirizzo HTTPS (per esempio con un tunnel Cloudflare) e imposta `TASKHIT_PUBLIC_URL`.
 5. Apri quell'indirizzo e completa la configurazione guidata. Se passi dal tunnel, imposta `TASKHIT_ALLOW_REMOTE_SETUP: "true"` solo il tempo di creare l'amministratore, poi toglilo.
+
+## Backup
+
+Da *Profilo → Backup* l'amministratore sceglie quando farli (di partenza: ogni notte alle 03:00, conservando gli ultimi 14), li scarica e li ripristina.
+
+- **Cosa contengono**: database, la chiave che lo apre e i temi. Chi ha il file ha i dati pubblici e gli account: conservalo al sicuro. Gli eventi privati restano cifrati.
+- **Dove stanno**: in `backups/` dentro la cartella dei dati. Se disinstalli l'app o si guasta il disco spariscono con lei: scaricali ogni tanto, oppure scegli una cartella per la seconda copia (su Umbrel nelle impostazioni dell'app; altrove con `TASKHIT_BACKUP_COPY_DIR`). La seconda copia non viene mai sfoltita.
+- **Ripristino**: dall'archivio, con la password; prima viene salvata una copia dello stato attuale e poi tutti accedono di nuovo. Su un'installazione nuova: *Hai un backup? Ripristinalo*, nella prima schermata (dall'indirizzo di casa).
 
 ## Licenza
 

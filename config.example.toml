@@ -9,6 +9,8 @@ bind = "0.0.0.0:8080"
 [paths]
 data_dir = "/data"
 web_dir = "/app/web"
+# Se la cartella esiste, ogni backup vi viene anche copiato (meglio su un altro disco).
+# backup_copy_dir = "/copie"
 
 [security]
 session_days = 30

@@ -1,5 +1,5 @@
 //! API HTTP: stato, primo avvio, accesso, sessione e temi; il resto e' nei moduli
-//! `events`, `proposals`, `people` e `meta`. Push e backup sono in roadmap (vedi ARCHITETTURA.md).
+//! `events`, `proposals`, `people` e `meta`. I backup stanno in `backup`; le push sono in roadmap (vedi ARCHITETTURA.md).
 
 use crate::{
     auth::{self, AuthUser},
@@ -39,6 +39,7 @@ pub fn routes() -> Router<AppState> {
         .merge(proposals::routes())
         .merge(people::routes())
         .merge(meta::routes())
+        .merge(crate::backup::routes())
         .fallback(|| async { ApiError::NotFound })
 }
 
@@ -47,7 +48,7 @@ async fn health(State(st): State<AppState>) -> Result<Json<Value>, ApiError> {
     Ok(Json(json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") })))
 }
 
-async fn user_count(st: &AppState) -> Result<i64, ApiError> {
+pub async fn user_count(st: &AppState) -> Result<i64, ApiError> {
     st.db.run(|c| Ok(c.query_row("SELECT COUNT(*) FROM users", [], |r| r.get::<_, i64>(0))?)).await
 }
 
@@ -111,6 +112,19 @@ async fn create_session(st: &AppState, user_id: String, headers: &HeaderMap) -> 
     Ok(token)
 }
 
+/// Chi puo' fare il primo avvio (crearne l'admin o ripristinare un backup).
+/// Si fa dalla rete locale: una richiesta che arriva dal tunnel porta l'intestazione di Cloudflare.
+pub fn check_setup_allowed(st: &AppState, ip: &str, headers: &HeaderMap) -> Result<(), ApiError> {
+    let sec = &st.cfg.security;
+    if !sec.allow_remote_setup && !sec.client_ip_header.is_empty() && headers.contains_key(sec.client_ip_header.as_str()) {
+        return Err(ApiError::Forbidden("completa la configurazione iniziale dalla rete locale, prima di pubblicare il tunnel"));
+    }
+    if !st.limiter.hit(&format!("setup:{ip}"), 10, 60) {
+        return Err(ApiError::TooManyRequests);
+    }
+    Ok(())
+}
+
 /// Crea il primo admin. Funziona una volta sola, finche' non esiste nessun utente.
 async fn setup(
     State(st): State<AppState>,
@@ -118,14 +132,7 @@ async fn setup(
     headers: HeaderMap,
     Json(req): Json<AccountKeys>,
 ) -> Result<Response, ApiError> {
-    let sec = &st.cfg.security;
-    // Il primo avvio si fa dalla rete locale: una richiesta che arriva dal tunnel porta l'intestazione di Cloudflare.
-    if !sec.allow_remote_setup && !sec.client_ip_header.is_empty() && headers.contains_key(sec.client_ip_header.as_str()) {
-        return Err(ApiError::Forbidden("completa la configurazione iniziale dalla rete locale, prima di pubblicare il tunnel"));
-    }
-    if !st.limiter.hit(&format!("setup:{ip}"), 10, 60) {
-        return Err(ApiError::TooManyRequests);
-    }
+    check_setup_allowed(&st, &ip, &headers)?;
     let req = req.checked()?;
     let (username, display_name) = (req.username.clone(), req.display_name.clone());
     if user_count(&st).await? > 0 {
@@ -193,7 +200,7 @@ pub async fn hash_blocking(st: &AppState, auth_key: String) -> Result<String, Ap
     tokio::task::spawn_blocking(move || auth::hash_auth_key(&auth_key)).await.map_err(ApiError::internal)?.map_err(ApiError::from)
 }
 
-async fn verify_blocking(st: &AppState, auth_key: String, stored: String) -> Result<bool, ApiError> {
+pub async fn verify_blocking(st: &AppState, auth_key: String, stored: String) -> Result<bool, ApiError> {
     let _slot = st.hash_slots.clone().acquire_owned().await.map_err(ApiError::internal)?;
     tokio::task::spawn_blocking(move || auth::verify_auth_key(&auth_key, &stored)).await.map_err(ApiError::internal)
 }
