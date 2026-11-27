@@ -75,7 +75,8 @@
   const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca'];
   const DELL_ADMIN = [...COMUNI, 'persone', 'backup'];
   const admin = $derived(app.utente?.role === 'admin');
-  const permessa = $derived((admin ? DELL_ADMIN : DELLA_CLASSE).includes(rotta.nome));
+  const permessa = $derived((admin ? DELL_ADMIN : DELLA_CLASSE).includes(rotta.nome)
+    || (rotta.nome === 'persone' && app.utente?.role === 'rappresentante'));
   const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca']).includes(rotta.nome));
   $effect(() => { if (fase === 'pronta' && app.utente && !permessa) sostituisci(admin ? 'persone' : 'oggi'); });
 </script>

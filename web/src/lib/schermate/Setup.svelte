@@ -35,7 +35,7 @@
   const PASSI = [
     ['Crea l’account admin', 'L’admin gestisce solo la parte tecnica: utenti, gruppi, plugin e backup. Non fa parte della classe.'],
     ['Dai un nome alla tua istanza', 'Niente è scritto nel codice: tutto quello che imposti qui si può cambiare dopo.'],
-    ['Classi e gruppi', 'Solo l’admin può creare gruppi. Gli eventi pubblici arrivano a chi fa parte del gruppo.'],
+    ['Classi e gruppi', 'Le classi le crei tu; i rappresentanti potranno aggiungere gruppi al loro interno. Gli eventi pubblici arrivano a chi fa parte del gruppo.'],
     ['Sicurezza e backup', 'Lo stato reale di questo server. Le impostazioni di sicurezza stanno in config.toml.'],
   ] as const;
 

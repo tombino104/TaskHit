@@ -11,9 +11,11 @@
   import { orologio } from '../orologio.svelte';
   import { linkInvito, codiceLeggibile } from '../inviti';
 
+  // L'admin gestisce persone, ruoli e ogni gruppo; il rappresentante inviti, richieste e gruppi della sua classe.
+  const admin = $derived(app.utente?.role === 'admin');
   type Scheda = 'persone' | 'gruppi' | 'inviti';
   type Filtro = 'tutti' | Ruolo;
-  let scheda = $state<Scheda>('persone');
+  let scheda = $state<Scheda>(app.utente?.role === 'admin' ? 'persone' : 'inviti');
   let filtro = $state<Filtro>('tutti');
   let cerca = $state('');
   let persone = $state<Persona[]>([]);
@@ -39,7 +41,9 @@
     } catch (e) { avvisa(messaggio(e)); return false; }
   }
 
-  const gruppi = $derived(app.meta?.groups ?? []);
+  const gruppi = $derived(app.meta?.groups.filter((g) => g.manage) ?? []);
+  const nomeGruppo = (id: string | null) => app.meta?.groups.find((g) => g.id === id)?.name;
+  const SCHEDE = $derived<[Scheda, string][]>([...(admin ? [['persone', 'Persone'] as [Scheda, string]] : []), ['gruppi', 'Gruppi'], ['inviti', 'Inviti']]);
   const nomiGruppi = (ids: string[]) => gruppi.filter((g) => ids.includes(g.id)).map((g) => g.name).join(' · ') || 'Nessun gruppo';
   const conta = (r: Filtro) => (r === 'tutti' ? persone.length : persone.filter((p) => p.role === r).length);
   const FILTRI: [Filtro, string][] = [['tutti', 'Tutti'], ['admin', 'Admin'], ['rappresentante', 'Rappr.'], ['nerd', 'Nerd'], ['alunno', 'Alunni']];
@@ -56,6 +60,15 @@
   let ruolo = $state<Ruolo>('alunno');
   let suoi = $state<string[]>([]);
   function apri(p: Persona) { scelta = p; ruolo = p.role; suoi = [...p.group_ids]; }
+  /** Un gruppo di una classe porta con sé la classe; togliendo la classe si tolgono i suoi gruppi. */
+  function spunta(id: string) {
+    let nuovi = commuta(suoi, id);
+    const g = gruppi.find((x) => x.id === id);
+    if (nuovi.includes(id)) {
+      if (g?.parent_id && !nuovi.includes(g.parent_id)) nuovi = [...nuovi, g.parent_id];
+    } else nuovi = nuovi.filter((x) => gruppi.find((y) => y.id === x)?.parent_id !== id);
+    suoi = nuovi;
+  }
   const io = $derived(scelta?.id === app.utente?.id);
   async function salva() {
     const p = scelta!;
@@ -68,10 +81,20 @@
 
   // --- Gruppi e inviti ---
   let nuovoGruppo = $state(false);
+  // Membri di un gruppo interno a una classe (rappresentante).
+  let gruppoScelto = $state<string | null>(null);
+  let membri = $state<string[]>([]);
+  const inModifica = $derived(gruppi.find((g) => g.id === gruppoScelto));
+  const compagni = $derived(app.meta?.groups.find((g) => g.id === inModifica?.parent_id)?.members ?? []);
+  function apriGruppo(g: (typeof gruppi)[number]) { gruppoScelto = g.id; membri = g.members.map((m) => m.id); }
+  async function salvaGruppo() {
+    if (await esegui(() => api.salvaMembri(gruppoScelto!, $state.snapshot(membri)), 'Salvato.')) gruppoScelto = null;
+  }
   const sottotitolo = (g: (typeof gruppi)[number]) => {
     const n = (r: Ruolo) => g.members.filter((m) => m.role === r).length;
     const r = n('rappresentante'), k = n('nerd');
-    return `${g.kind === 'classe' ? 'Classe' : 'Gruppo'} · ${r} ${r === 1 ? 'rappresentante' : 'rappresentanti'}, ${k} nerd`;
+    const tipo = g.kind === 'classe' ? 'Classe' : g.parent_id ? `Gruppo di ${nomeGruppo(g.parent_id) ?? 'classe'}` : 'Gruppo';
+    return `${tipo} · ${r} ${r === 1 ? 'rappresentante' : 'rappresentanti'}, ${k} nerd`;
   };
   const scadenza = (s: number) => `${daSecondi(s).getDate()} ${mese(daSecondi(s))}`;
   async function copia(code: string) {
@@ -84,14 +107,14 @@
 
 <div class="schermata con-menu persone">
   <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
-  <span class="dato occhio">Pannello admin</span>
+  <span class="dato occhio">{admin ? 'Pannello admin' : 'Rappresentante'}</span>
   <header>
-    <h1>Persone</h1>
+    <h1>{admin ? 'Persone' : 'Classe'}</h1>
     <button type="button" class="pulsante pieno" onclick={invita}><Icona nome="piu" size={16} spessore={1.8} />Invita</button>
   </header>
 
   <div role="tablist" aria-label="Sezioni" class="schede">
-    {#each [['persone', 'Persone'], ['gruppi', 'Gruppi'], ['inviti', 'Inviti']] as const as [id, nome] (id)}
+    {#each SCHEDE as [id, nome] (id)}
       <button type="button" role="tab" aria-selected={scheda === id} onclick={() => (scheda = id)}>{nome}{#if id === 'inviti' && attesa.length}<span class="pallino">{attesa.length}</span>{/if}</button>
     {/each}
   </div>
@@ -127,17 +150,21 @@
     {#if !elenco.length}<p class="nota">Nessuno corrisponde.</p>{/if}
 
   {:else if scheda === 'gruppi'}
-    <p class="lede">Solo l'admin crea e modifica i gruppi. Un evento pubblico arriva a tutti i membri del gruppo scelto.</p>
+    <p class="lede">{admin ? 'Un evento pubblico arriva a tutti i membri del gruppo scelto.' : 'Puoi creare gruppi dentro la tua classe e scegliere chi ne fa parte.'}</p>
     <ul class="elenco">
       {#each gruppi as g (g.id)}
         <li class="gruppo">
           <span class="voce"><span class="serif">{g.name}</span><span class="nota">{sottotitolo(g)}</span></span>
-          <span class="mono">{g.members.length}</span>
+          {#if !admin && g.parent_id}
+            <button type="button" class="cambia" aria-label="Scegli i membri di {g.name}" onclick={() => apriGruppo(g)}>MEMBRI {g.members.length}<Icona nome="giu" size={14} /></button>
+          {:else}
+            <span class="mono">{g.members.length}</span>
+          {/if}
         </li>
       {/each}
     </ul>
     <button type="button" class="pulsante tratteggiato" onclick={() => (nuovoGruppo = true)}>+ Nuovo gruppo</button>
-    <p class="nota">Per aggiungere o togliere persone da un gruppo, apri il loro ruolo nella scheda Persone.</p>
+    {#if admin}<p class="nota">Per aggiungere o togliere persone da un gruppo, apri il loro ruolo nella scheda Persone.</p>{/if}
 
   {:else}
     {#each gruppi as g (g.id)}
@@ -156,8 +183,12 @@
         {/if}
       </div>
     {:else}
-      <p class="nota">Crea prima una classe o un gruppo: il codice invito è legato a un gruppo.</p>
-      <button type="button" class="pulsante tratteggiato" onclick={() => (nuovoGruppo = true)}>+ Nuovo gruppo</button>
+      {#if admin}
+        <p class="nota">Crea prima una classe o un gruppo: il codice invito è legato a un gruppo.</p>
+        <button type="button" class="pulsante tratteggiato" onclick={() => (nuovoGruppo = true)}>+ Nuovo gruppo</button>
+      {:else}
+        <p class="nota">Non fai ancora parte di una classe: chiedi all'admin di aggiungerti.</p>
+      {/if}
     {/each}
 
     <h2 class="dato attesa">In attesa di conferma</h2>
@@ -191,7 +222,7 @@
       <fieldset>
         <legend class="dato">Gruppi</legend>
         {#each gruppi as g (g.id)}
-          <label class="spunta"><input type="checkbox" checked={suoi.includes(g.id)} onchange={() => (suoi = commuta(suoi, g.id))} /><span>{g.name}</span></label>
+          <label class="spunta"><input type="checkbox" checked={suoi.includes(g.id)} onchange={() => spunta(g.id)} /><span>{g.name}</span></label>
         {:else}
           <p class="nota">Nessun gruppo ancora.</p>
         {/each}
@@ -203,6 +234,18 @@
     {#if !io}
       <button type="button" class="pulsante" onclick={() => attiva(scelta!.disabled)}>{scelta.disabled ? 'Riattiva account' : 'Disattiva account'}</button>
     {/if}
+  </Foglio>
+{/if}
+
+{#if inModifica}
+  <Foglio titolo={inModifica.name} onclose={() => (gruppoScelto = null)}>
+    <fieldset>
+      <legend class="dato">Membri</legend>
+      {#each compagni as m (m.id)}
+        <label class="spunta"><input type="checkbox" checked={membri.includes(m.id)} onchange={() => (membri = commuta(membri, m.id))} /><span>{m.name}{m.id === app.utente?.id ? ' (tu)' : ''}</span></label>
+      {/each}
+    </fieldset>
+    <button type="button" class="pulsante pieno grande" onclick={salvaGruppo}>Salva</button>
   </Foglio>
 {/if}
 

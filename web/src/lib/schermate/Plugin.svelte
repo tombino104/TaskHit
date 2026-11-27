@@ -6,7 +6,7 @@
   import { api } from '../api';
   import { app, avvisa, messaggio, sincronizza } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
-  import { perGiorno } from '../events';
+  import { perGiorno, puoGestire } from '../events';
   import { chiave, dataLunga, giornoBreve, grigliaMese, mese, meseBreve, piuGiorni, settimana } from '../dates';
 
   type Periodo = 'prossimi' | 'settimana' | 'mese';
@@ -47,6 +47,7 @@
 
   const stato = $derived(app.meta?.plugins.grafico ?? { user: true, instance: true });
   const admin = $derived(app.utente?.role === 'admin');
+  const decide = $derived(!!app.utente && puoGestire(app.utente.role));
   async function cambia(ambito: 'user' | 'instance', attivo: boolean) {
     try { await api.salvaPlugin('grafico', ambito, attivo); await sincronizza(); }
     catch (e) { avvisa(messaggio(e)); }
@@ -88,7 +89,7 @@
     {#if !admin}
       <Interruttore nome="Mostralo a me" descrizione="Puoi nasconderlo solo per te" attivo={stato.user} disabilitato={!app.online} onchange={(v) => cambia('user', v)} />
     {/if}
-    <Interruttore nome="Attivo per tutta la classe" descrizione="Lo decide l’admin" attivo={stato.instance} disabilitato={!admin || !app.online} onchange={(v) => cambia('instance', v)} />
+    <Interruttore nome="Attivo per tutta la classe" descrizione="Lo decidono admin e rappresentanti" attivo={stato.instance} disabilitato={!decide || !app.online} onchange={(v) => cambia('instance', v)} />
     <button type="button" class="pulsante tratteggiato installa" disabled><Icona nome="piu" size={18} />Installa plugin · in arrivo</button>
   </section>
 </div>

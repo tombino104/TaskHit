@@ -3,6 +3,7 @@
 
 use crate::{auth::AuthUser, error::ApiError, ratelimit::now_secs};
 use rusqlite::{Connection, params};
+use std::collections::HashSet;
 
 pub const ROLES: [&str; 4] = ["admin", "rappresentante", "nerd", "alunno"];
 
@@ -34,9 +35,33 @@ pub fn require_class_member(u: &AuthUser) -> Result<(), ApiError> {
     if u.role == "admin" { Err(ApiError::Forbidden("l'amministratore non gestisce eventi: usa un account della classe")) } else { Ok(()) }
 }
 
-/// I contenuti della classe (materie, tipi, scelte per tutti) li decide il rappresentante.
+/// I contenuti della classe (materie, tipi) li decide il rappresentante.
 pub fn require_representative(u: &AuthUser) -> Result<(), ApiError> {
     if publish_right(&u.role) == Publish::Direct { Ok(()) } else { Err(ApiError::Forbidden("operazione riservata ai rappresentanti")) }
+}
+
+/// Gruppi di cui l'utente gestisce inviti e richieste; `None` = tutti (admin).
+/// Un rappresentante gestisce le classi di cui fa parte e i gruppi creati al loro interno.
+pub fn managed_groups(c: &Connection, u: &AuthUser) -> Result<Option<HashSet<String>>, ApiError> {
+    if u.role == "admin" {
+        return Ok(None);
+    }
+    require_manager(u)?;
+    let mut stmt = c.prepare(
+        "WITH mie AS (SELECT g.id FROM groups g JOIN group_members m ON m.group_id = g.id WHERE m.user_id = ?1 AND g.kind = 'classe')
+         SELECT id FROM mie UNION SELECT id FROM groups WHERE parent_id IN (SELECT id FROM mie)",
+    )?;
+    let ids = stmt.query_map(params![u.id], |r| r.get(0))?.collect::<Result<_, _>>()?;
+    Ok(Some(ids))
+}
+
+pub fn manages(groups: &Option<HashSet<String>>, group_id: &str) -> bool {
+    groups.as_ref().is_none_or(|g| g.contains(group_id))
+}
+
+/// Admin e rappresentanti: inviti, richieste di iscrizione, gruppi e plugin.
+pub fn require_manager(u: &AuthUser) -> Result<(), ApiError> {
+    if u.role == "admin" || u.role == "rappresentante" { Ok(()) } else { Err(ApiError::Forbidden("operazione riservata ad admin e rappresentanti")) }
 }
 
 pub fn now() -> i64 {

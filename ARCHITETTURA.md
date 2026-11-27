@@ -79,7 +79,7 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 |---|---|
 | `users` | nome utente normalizzato, ruolo (`admin`, `rappresentante`, `nerd`, `alunno`), hash di `auth_key`, `kdf_salt`, `wrapped_key`, `recovery_wrapped_key`, `profile_blob` cifrato |
 | `sessions` | SHA-256 del token, scadenza |
-| `groups`, `group_members` | classi e gruppi (creabili solo dall'admin) |
+| `groups`, `group_members` | classi e gruppi; `parent_id` lega un gruppo a una classe (solo i suoi membri vi entrano) |
 | `tags`, `labels` | materie con colore esadecimale; tipi testuali (interrogazione, ed. Civica, verifica, verifica di recupero, corso scolastico/extrascolastico, rientro, FSL, altro), con sotto-tipo opzionale |
 | `events` | pubblici: campi in chiaro; privati: **solo** `payload` cifrato. Un `CHECK` del database impone la separazione. Creatore/modificatore e timestamp registrati dal server, `rev` per la concorrenza, cancellazione logica |
 | `reminders` | promemoria opzionali per evento |
@@ -108,7 +108,7 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 | `GET /api/proposals`, `POST …/{id}/decide` | approvazioni |
 | `GET /api/inbox`, `POST /api/inbox/read` | notifiche |
 | `GET /api/meta`, `POST /api/tags`, `POST /api/labels`, `PUT /api/settings`, `PUT /api/plugins/{id}` | materie, etichette, gruppi, impostazioni |
-| `GET /api/users`, `PATCH …/{id}`, `POST …/accept`, `…/reject`, `POST /api/groups` | persone e gruppi (admin) |
+| `GET /api/users`, `PATCH …/{id}`, `POST …/accept`, `…/reject`, `POST /api/groups` | persone (admin); richieste e gruppi anche ai rappresentanti, per la propria classe (`PUT /api/groups/{id}/members`) |
 | `GET /api/invites`, `POST /api/invites`, `POST …/revoke`, `POST /api/join` | inviti; chi si iscrive resta in attesa dell'admin |
 | `GET /api/backups`, `POST /api/backups`, `PUT …/settings`, `GET …/{nome}`, `POST …/{nome}/delete`, `…/restore`, `POST …/upload`, `POST /api/setup/restore` | backup e ripristino (admin; l'ultimo solo su un'installazione vuota) |
 | `GET /api/me`, `PATCH /api/me`, `POST /api/me/sessions/revoke-others`, `GET /api/admin/status` | profilo e stato del server |
@@ -124,7 +124,10 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 
 | | Admin | Rappresentanti | Nerd | Alunni |
 |---|---|---|---|---|
-| Gruppi, persone, inviti, plugin per tutti, backup | ✓ | — | — | — |
+| Persone, ruoli, classi, backup | ✓ | — | — | — |
+| Inviti e richieste di iscrizione | ✓ | solo la propria classe | — | — |
+| Creare gruppi e sceglierne i membri | ✓ | dentro la propria classe | — | — |
+| Plugin per tutti | ✓ | ✓ | — | — |
 | Fare parte della classe e vedere il calendario | — | ✓ | ✓ | ✓ |
 | Materie e tipi di evento | — | ✓ | — | — |
 | Approvare/rifiutare proposte | — | ✓ | — | — |
@@ -151,9 +154,9 @@ Inclusi: Carta, Notte, Quaderno, Lavagna. In «Aspetto» si sceglie la modalità
 
 ## 8. Plugin
 
-Oggi c'è un solo plugin interno, il **grafico del carico**, attivabile per l'istanza (admin) o per utente. Il sistema qui sotto è **da implementare**.
+Oggi c'è un solo plugin interno, il **grafico del carico**, attivabile per l'istanza (admin e rappresentanti) o per utente. Il sistema qui sotto è **da implementare**.
 
-Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widget, impostazioni). I plugin di prima parte sono compilati nell'app; quelli di terzi girerebbero in un `iframe` con `sandbox` e comunicazione via `postMessage`, senza accesso alla DEK. Stato (`plugin_state`): attivo per istanza (decide l'admin) o per utente.
+Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widget, impostazioni). I plugin di prima parte sono compilati nell'app; quelli di terzi girerebbero in un `iframe` con `sandbox` e comunicazione via `postMessage`, senza accesso alla DEK. Stato (`plugin_state`): attivo per istanza (decidono admin e rappresentanti) o per utente.
 
 ## 9. Distribuzione: Docker, Umbrel, Cloudflare
 

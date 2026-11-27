@@ -60,28 +60,37 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             })?;
 
             // Ognuno vede i propri gruppi e i compagni che ne fanno parte. L'admin vede tutti i gruppi
-            // per gestirli, ma non compare mai tra i membri.
+            // e il rappresentante anche quelli interni alla sua classe, per gestirli. L'admin non compare mai tra i membri.
+            let managed = if common::require_manager(&user).is_ok() { Some(common::managed_groups(c, &user)?) } else { None };
             let mut stmt = c.prepare(
-                "SELECT g.id, g.name, g.kind, EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1)
-                   FROM groups g
-                  WHERE ?2 OR EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1)
-                  ORDER BY g.kind, g.name COLLATE NOCASE",
+                "SELECT g.id, g.name, g.kind, g.parent_id,
+                        EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1)
+                   FROM groups g ORDER BY g.kind, g.name COLLATE NOCASE",
             )?;
-            let found: Vec<(String, String, String, bool)> = stmt
-                .query_map(params![user.id, user.role == "admin"], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?
+            type Group = (String, String, String, Option<String>, bool);
+            let found: Vec<Group> = stmt
+                .query_map(params![user.id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
                 .collect::<Result<_, _>>()?;
             let mut groups = vec![];
             let mut members = c.prepare(
                 "SELECT u.id, u.display_name, u.role FROM group_members m JOIN users u ON u.id = m.user_id
                   WHERE m.group_id = ?1 AND u.disabled = 0 AND u.pending = 0 AND u.role <> 'admin' ORDER BY u.display_name COLLATE NOCASE",
             )?;
-            for (id, name, kind, mine) in found {
+            let mut pending = 0;
+            for (id, name, kind, parent_id, mine) in found {
+                let manage = managed.as_ref().is_some_and(|set| common::manages(set, &id));
+                if !mine && !manage {
+                    continue;
+                }
+                if manage {
+                    pending += c.query_row("SELECT COUNT(*) FROM users WHERE pending = 1 AND pending_group_id = ?1", params![id], |r| r.get::<_, i64>(0))?;
+                }
                 let list: Vec<Value> = members
                     .query_map(params![id], |r| {
                         Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "role": r.get::<_, String>(2)? }))
                     })?
                     .collect::<Result<_, _>>()?;
-                groups.push(json!({ "id": id, "name": name, "kind": kind, "mine": mine, "members": list }));
+                groups.push(json!({ "id": id, "name": name, "kind": kind, "parent_id": parent_id, "mine": mine, "manage": manage, "members": list }));
             }
 
             let mut settings = Map::new();
@@ -93,7 +102,7 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             for p in PLUGINS {
                 plugins.insert(p.into(), json!({ "user": plugin_enabled(c, p, "user", &user.id)?, "instance": plugin_enabled(c, p, "instance", "")? }));
             }
-            Ok(json!({ "tags": tags, "labels": labels, "groups": groups, "settings": settings, "plugins": plugins }))
+            Ok(json!({ "tags": tags, "labels": labels, "groups": groups, "settings": settings, "plugins": plugins, "pending": pending }))
         })
         .await?;
     Ok(Json(res))
@@ -204,7 +213,7 @@ async fn save_plugin(State(st): State<AppState>, user: AuthUser, Path(id): Path<
     let owner = match req.scope.as_str() {
         "user" => user.id.clone(),
         "instance" => {
-            common::require_admin(&user)?;
+            common::require_manager(&user)?;
             String::new()
         }
         _ => return Err(ApiError::BadRequest("ambito non valido")),

@@ -56,6 +56,8 @@ export const gruppoDi = (meta: Meta | null, id: string | null): Gruppo | undefin
 export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? 'Gruppo' : g.kind === 'classe' ? `Classe ${g.name}` : `Gruppo ${g.name}`);
 
 export const NOMI_RUOLO: Record<Ruolo, string> = { admin: 'Admin', rappresentante: 'Rappresentante', nerd: 'Nerd', alunno: 'Alunno' };
+/** Inviti, richieste, gruppi e plugin: admin e rappresentanti. */
+export const puoGestire = (r: Ruolo): boolean => r === 'admin' || r === 'rappresentante';
 export const puoPubblicare = (r: Ruolo): 'diretto' | 'proposta' | 'no' =>
   r === 'rappresentante' ? 'diretto' : r === 'nerd' ? 'proposta' : 'no';
 

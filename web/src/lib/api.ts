@@ -47,11 +47,19 @@ export interface NuovoAccount {
 export interface Materia { id: string; name: string; color: string }
 export interface Tipo { id: string; name: string; subs: string[]; personal: boolean }
 export interface Membro { id: string; name: string; role: Ruolo }
-export interface Gruppo { id: string; name: string; kind: 'classe' | 'gruppo'; mine: boolean; members: Membro[] }
+export interface Gruppo {
+  id: string; name: string; kind: 'classe' | 'gruppo'; mine: boolean; members: Membro[];
+  /** Classe in cui è nato il gruppo. */
+  parent_id: string | null;
+  /** Se l'utente ne gestisce inviti e richieste (admin e rappresentanti). */
+  manage: boolean;
+}
 export interface Impostazioni { instance_name: string; public_url: string; school_year: string; timezone: string }
 export interface Meta {
   tags: Materia[]; labels: Tipo[]; groups: Gruppo[]; settings: Impostazioni;
   plugins: { grafico: { user: boolean; instance: boolean } };
+  /** Richieste di iscrizione che l'utente può accettare. */
+  pending: number;
 }
 
 /** Campi di un evento: in chiaro se pubblico, dentro il blob cifrato se privato. */
@@ -148,7 +156,8 @@ export const api = {
   salvaPersona: (userId: string, b: { role?: Ruolo; disabled?: boolean; group_ids?: string[] }) => call<Ok>('PATCH', `/api/users/${id(userId)}`, b),
   accetta: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/accept`, {}),
   rifiuta: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/reject`, {}),
-  creaGruppo: (name: string, kind: Gruppo['kind']) => call<{ id: string }>('POST', '/api/groups', { name, kind }),
+  creaGruppo: (name: string, kind: Gruppo['kind'], parent_id?: string) => call<{ id: string }>('POST', '/api/groups', { name, kind, parent_id }),
+  salvaMembri: (groupId: string, user_ids: string[]) => call<Ok>('PUT', `/api/groups/${id(groupId)}/members`, { user_ids }),
   inviti: () => call<{ invites: Invito[] }>('GET', '/api/invites'),
   creaInvito: (group_id: string) => call<{ code: string }>('POST', '/api/invites', { group_id }),
   revocaInvito: (inviteId: string) => call<Ok>('POST', `/api/invites/${id(inviteId)}/revoke`, {}),

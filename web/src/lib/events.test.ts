@@ -9,7 +9,7 @@ import type { Theme } from './api';
 const meta: Meta = {
   tags: [{ id: 'mat', name: 'Matematica', color: '#E4572E' }],
   labels: [{ id: 'ver', name: 'Verifica', subs: ['teorica'], personal: false }, { id: 'int', name: 'Interrogazione', subs: [], personal: true }],
-  groups: [], settings: { instance_name: '', public_url: '', school_year: '', timezone: '' },
+  groups: [], pending: 0, settings: { instance_name: '', public_url: '', school_year: '', timezone: '' },
   plugins: { grafico: { user: true, instance: true } },
 };
 const quando = (giorno: string, ora = '08:00') => D.aSecondi(giorno, ora);

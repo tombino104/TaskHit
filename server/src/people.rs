@@ -1,4 +1,5 @@
-//! Persone, gruppi e inviti. Li gestisce solo l'admin; chi riceve un codice puo' chiedere di entrare.
+//! Persone, gruppi e inviti. L'admin gestisce tutto; i rappresentanti inviti, richieste e gruppi della propria classe.
+//! Chi riceve un codice puo' chiedere di entrare.
 
 use crate::{
     api::{AccountKeys, hash_blocking},
@@ -10,7 +11,7 @@ use crate::{
 use axum::{
     Extension, Json, Router,
     extract::{Path, State},
-    routing::{get, patch, post},
+    routing::{get, patch, post, put},
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Deserialize;
@@ -18,6 +19,7 @@ use serde_json::{Value, json};
 
 const INVITE_DAYS: i64 = 7;
 const MAX_PENDING: i64 = 100;
+const MAX_CLASS_GROUPS: i64 = 30;
 /// Senza caratteri che si confondono (0/O, 1/I/L).
 const CODE_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const CODE_LEN: usize = 9;
@@ -29,6 +31,7 @@ pub fn routes() -> Router<AppState> {
         .route("/users/{id}/accept", post(accept))
         .route("/users/{id}/reject", post(reject))
         .route("/groups", post(create_group))
+        .route("/groups/{id}/members", put(set_members))
         .route("/invites", get(invites).post(create_invite))
         .route("/invites/{id}/revoke", post(revoke_invite))
         .route("/join", post(join))
@@ -39,11 +42,13 @@ fn group_ids(c: &Connection, user_id: &str) -> Result<Vec<String>, ApiError> {
     Ok(stmt.query_map(params![user_id], |r| r.get(0))?.collect::<Result<_, _>>()?)
 }
 
+/// L'admin riceve persone e richieste; il rappresentante solo le richieste dei gruppi che gestisce.
 async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     let res = st
         .db
-        .run(|c| {
+        .run(move |c| {
+            let managed = common::managed_groups(c, &user)?;
             let mut stmt = c.prepare(
                 "SELECT id, username, display_name, role, disabled, pending, pending_group_id, created_at FROM users
                   ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'rappresentante' THEN 1 WHEN 'nerd' THEN 2 ELSE 3 END, display_name COLLATE NOCASE",
@@ -55,8 +60,11 @@ async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             let (mut users, mut waiting) = (vec![], vec![]);
             for (id, username, display_name, role, disabled, pending, group, created_at) in rows {
                 if pending {
+                    if managed.is_some() && !group.as_deref().is_some_and(|g| common::manages(&managed, g)) {
+                        continue;
+                    }
                     waiting.push(json!({ "id": id, "username": username, "display_name": display_name, "group_id": group, "created_at": created_at }));
-                } else {
+                } else if managed.is_none() {
                     let groups = group_ids(c, &id)?;
                     users.push(json!({ "id": id, "username": username, "display_name": display_name, "role": role, "disabled": disabled, "group_ids": groups }));
                 }
@@ -117,6 +125,7 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 }
                 common::audit(&tx, &user.id, "groups_changed", Some(&id))?;
             }
+            drop_orphan_memberships(&tx)?;
             tx.commit()?;
             Ok(())
         })
@@ -124,19 +133,42 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Chi non fa parte di una classe non resta nei gruppi creati al suo interno.
+fn drop_orphan_memberships(c: &Connection) -> Result<(), ApiError> {
+    c.execute(
+        "DELETE FROM group_members WHERE EXISTS (
+            SELECT 1 FROM groups g WHERE g.id = group_members.group_id AND g.parent_id IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM group_members p WHERE p.group_id = g.parent_id AND p.user_id = group_members.user_id))",
+        [],
+    )?;
+    Ok(())
+}
+
+/// La richiesta in attesa, se chi chiede la puo' decidere. Quelle di altre classi risultano inesistenti.
+fn pending_request(c: &Connection, user: &AuthUser, id: &str) -> Result<Option<String>, ApiError> {
+    let group: Option<String> = c
+        .query_row("SELECT pending_group_id FROM users WHERE id = ?1 AND pending = 1", params![id], |r| r.get(0))
+        .optional()?
+        .ok_or(ApiError::NotFound)?;
+    let managed = common::managed_groups(c, user)?;
+    if managed.is_some() && !group.as_deref().is_some_and(|g| common::manages(&managed, g)) {
+        return Err(ApiError::NotFound);
+    }
+    Ok(group)
+}
+
 async fn accept(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
-            let group: Option<String> = tx
-                .query_row("SELECT pending_group_id FROM users WHERE id = ?1 AND pending = 1", params![id], |r| r.get(0))
-                .optional()?
-                .ok_or(ApiError::NotFound)?;
+            let group = pending_request(&tx, &user, &id)?;
             tx.execute("UPDATE users SET pending = 0, pending_group_id = NULL, updated_at = ?2 WHERE id = ?1", params![id, now()])?;
             if let Some(g) = group {
                 tx.execute(
-                    "INSERT OR IGNORE INTO group_members (group_id, user_id) SELECT id, ?2 FROM groups WHERE id = ?1",
+                    // Entrando in un gruppo di una classe si entra anche nella classe.
+                    "INSERT OR IGNORE INTO group_members (group_id, user_id)
+                     SELECT id, ?2 FROM groups WHERE id = ?1 OR id = (SELECT parent_id FROM groups WHERE id = ?1)",
                     params![g, id],
                 )?;
             }
@@ -149,9 +181,10 @@ async fn accept(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
 }
 
 async fn reject(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     st.db
         .run(move |c| {
+            pending_request(c, &user, &id)?;
             // Si cancellano solo le richieste non ancora accettate.
             if c.execute("DELETE FROM users WHERE id = ?1 AND pending = 1", params![id])? == 0 {
                 return Err(ApiError::NotFound);
@@ -166,30 +199,99 @@ async fn reject(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
 struct GroupReq {
     name: String,
     kind: String,
+    /// Classe in cui nasce il gruppo: obbligatoria per i rappresentanti.
+    parent_id: Option<String>,
 }
 
-/// I gruppi li crea solo l'admin, che pero' non ne fa parte.
+/// L'admin crea classi e gruppi, senza farne parte. Il rappresentante crea gruppi dentro la propria classe.
 async fn create_group(State(st): State<AppState>, user: AuthUser, Json(req): Json<GroupReq>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     let name = common::required_text(&req.name, 40, "il nome del gruppo deve avere da 1 a 40 caratteri")?;
     if req.kind != "classe" && req.kind != "gruppo" {
         return Err(ApiError::BadRequest("il tipo deve essere classe o gruppo"));
+    }
+    if user.role != "admin" && (req.kind != "gruppo" || req.parent_id.is_none()) {
+        return Err(ApiError::Forbidden("puoi creare solo gruppi all'interno della tua classe"));
+    }
+    if req.kind == "classe" && req.parent_id.is_some() {
+        return Err(ApiError::BadRequest("una classe non puo' stare dentro un'altra"));
     }
     let id = auth::random_hex(16);
     let gid = id.clone();
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
+            if let Some(parent) = &req.parent_id {
+                let managed = common::managed_groups(&tx, &user)?;
+                if !common::manages(&managed, parent) {
+                    return Err(ApiError::Forbidden("puoi creare solo gruppi all'interno della tua classe"));
+                }
+                if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1 AND kind = 'classe'", parent)? {
+                    return Err(ApiError::BadRequest("la classe scelta non esiste"));
+                }
+                let n: i64 = tx.query_row("SELECT COUNT(*) FROM groups WHERE parent_id = ?1", params![parent], |r| r.get(0))?;
+                if n >= MAX_CLASS_GROUPS {
+                    return Err(ApiError::Conflict("questa classe ha gia' troppi gruppi"));
+                }
+            }
             if common::exists(&tx, "SELECT 1 FROM groups WHERE name = ?1", &name)? {
                 return Err(ApiError::Conflict("esiste gia' un gruppo con questo nome"));
             }
-            tx.execute("INSERT INTO groups (id, name, kind, created_at) VALUES (?1, ?2, ?3, ?4)", params![gid, name, req.kind, now()])?;
+            tx.execute(
+                "INSERT INTO groups (id, name, kind, parent_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![gid, name, req.kind, req.parent_id, now()],
+            )?;
+            // Chi lo crea da rappresentante ne fa subito parte, per poterci pubblicare.
+            if user.role != "admin" {
+                tx.execute("INSERT INTO group_members (group_id, user_id) VALUES (?1, ?2)", params![gid, user.id])?;
+            }
             common::audit(&tx, &user.id, "group_created", Some(&gid))?;
             tx.commit()?;
             Ok(())
         })
         .await?;
     Ok(Json(json!({ "id": id })))
+}
+
+#[derive(Deserialize)]
+struct MembersReq {
+    user_ids: Vec<String>,
+}
+
+/// Sceglie chi fa parte di un gruppo interno a una classe, tra i membri di quella classe.
+async fn set_members(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<MembersReq>) -> Result<Json<Value>, ApiError> {
+    common::require_manager(&user)?;
+    st.db
+        .run(move |c| {
+            let tx = c.transaction()?;
+            let managed = common::managed_groups(&tx, &user)?;
+            if !common::manages(&managed, &id) {
+                return Err(ApiError::NotFound);
+            }
+            let parent: Option<String> = tx
+                .query_row("SELECT parent_id FROM groups WHERE id = ?1", params![id], |r| r.get(0))
+                .optional()?
+                .ok_or(ApiError::NotFound)?;
+            let parent = parent.ok_or(ApiError::Forbidden("i membri di questo gruppo li gestisce l'admin"))?;
+            tx.execute("DELETE FROM group_members WHERE group_id = ?1", params![id])?;
+            for member in &req.user_ids {
+                let ok = tx
+                    .prepare(
+                        "SELECT 1 FROM group_members m JOIN users u ON u.id = m.user_id
+                          WHERE m.group_id = ?1 AND m.user_id = ?2 AND u.pending = 0 AND u.role <> 'admin'",
+                    )?
+                    .exists(params![parent, member])?;
+                if !ok {
+                    return Err(ApiError::BadRequest("nel gruppo puo' entrare solo chi fa parte della classe"));
+                }
+                tx.execute("INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?1, ?2)", params![id, member])?;
+            }
+            common::audit(&tx, &user.id, "members_changed", Some(&id))?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 fn new_code() -> String {
@@ -212,10 +314,11 @@ fn normalize_code(raw: &str) -> String {
 }
 
 async fn invites(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     let items = st
         .db
-        .run(|c| {
+        .run(move |c| {
+            let managed = common::managed_groups(c, &user)?;
             let mut stmt = c.prepare(
                 "SELECT id, code, group_id, expires_at, uses FROM invites WHERE revoked_at IS NULL AND expires_at > ?1 ORDER BY created_at DESC",
             )?;
@@ -223,7 +326,9 @@ async fn invites(State(st): State<AppState>, user: AuthUser) -> Result<Json<Valu
                 Ok(json!({ "id": r.get::<_, String>(0)?, "code": r.get::<_, String>(1)?, "group_id": r.get::<_, String>(2)?,
                            "expires_at": r.get::<_, i64>(3)?, "uses": r.get::<_, i64>(4)? }))
             })?;
-            Ok(rows.collect::<Result<Vec<_>, _>>()?)
+            let mut found = rows.collect::<Result<Vec<_>, _>>()?;
+            found.retain(|i| common::manages(&managed, i["group_id"].as_str().unwrap_or("")));
+            Ok(found)
         })
         .await?;
     Ok(Json(json!({ "invites": items })))
@@ -236,12 +341,16 @@ struct InviteReq {
 
 /// Un solo codice attivo per gruppo: crearne uno nuovo revoca il precedente.
 async fn create_invite(State(st): State<AppState>, user: AuthUser, Json(req): Json<InviteReq>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     let code = new_code();
     let out = code.clone();
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
+            let managed = common::managed_groups(&tx, &user)?;
+            if !common::manages(&managed, &req.group_id) {
+                return Err(ApiError::Forbidden("puoi invitare solo nella tua classe"));
+            }
             if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1", &req.group_id)? {
                 return Err(ApiError::BadRequest("il gruppo scelto non esiste"));
             }
@@ -259,9 +368,14 @@ async fn create_invite(State(st): State<AppState>, user: AuthUser, Json(req): Js
 }
 
 async fn revoke_invite(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_manager(&user)?;
     st.db
         .run(move |c| {
+            let group: Option<String> = c.query_row("SELECT group_id FROM invites WHERE id = ?1", params![id], |r| r.get(0)).optional()?;
+            let managed = common::managed_groups(c, &user)?;
+            if !group.is_some_and(|g| common::manages(&managed, &g)) {
+                return Err(ApiError::NotFound);
+            }
             if c.execute("UPDATE invites SET revoked_at = ?2 WHERE id = ?1 AND revoked_at IS NULL", params![id, now()])? == 0 {
                 return Err(ApiError::NotFound);
             }

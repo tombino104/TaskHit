@@ -14,6 +14,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/001_init.sql"),
     include_str!("../migrations/002_calendario.sql"),
     include_str!("../migrations/003_admin_fuori_dalla_classe.sql"),
+    include_str!("../migrations/004_gruppi_della_classe.sql"),
 ];
 
 /// Versione dello schema che questa build conosce.

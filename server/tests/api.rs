@@ -632,13 +632,15 @@ async fn the_admin_runs_the_server_and_stays_out_of_the_class() {
     body["data"]["subject_id"] = json!(admin_id);
     assert_eq!(c.post("/api/events", body, &rap).await.0, StatusCode::BAD_REQUEST);
 
-    // Il rappresentante cura i contenuti, non l'impianto.
+    // Il rappresentante cura i contenuti della classe.
     for (uri, body) in [("/api/tags", json!({"name":"Fisica","color":"#112233"})), ("/api/labels", json!({"name":"Gita"}))] {
         assert_eq!(c.post(uri, body, &rap).await.0, StatusCode::OK, "{uri}");
     }
     let plugin = json!({"scope":"instance","enabled":false});
+    let (s, _, _) = send(&c.app, Method::PUT, "/api/plugins/grafico", Some(plugin.clone()), &[("cookie", &nerd)]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "i plugin per tutti: solo admin e rappresentanti");
     let (s, _, _) = send(&c.app, Method::PUT, "/api/plugins/grafico", Some(plugin.clone()), &[("cookie", &rap)]).await;
-    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert_eq!(s, StatusCode::OK);
     let (s, _, _) = send(&c.app, Method::PUT, "/api/plugins/grafico", Some(plugin), &[("cookie", &c.admin)]).await;
     assert_eq!(s, StatusCode::OK);
 
@@ -649,6 +651,79 @@ async fn the_admin_runs_the_server_and_stays_out_of_the_class() {
     let giulia = list["users"].as_array().unwrap().iter().find(|u| u["id"] == rid.as_str()).unwrap().clone();
     assert_eq!(giulia["group_ids"], json!([]));
     assert!(c.eventi(&rap).await.is_empty());
+}
+
+#[tokio::test]
+async fn representatives_manage_invites_and_groups_of_their_own_class_only() {
+    let c = Classe::nuova().await;
+    let (rid, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
+    let (aid, anna) = c.iscrivi("anna", "alunno", 3).await;
+    let (_, altra) = c.post("/api/groups", json!({"name":"5C","kind":"classe"}), &c.admin).await;
+    let altra = altra["id"].as_str().unwrap().to_owned();
+    let (_, fuori) = c.post("/api/invites", json!({"group_id": altra}), &c.admin).await;
+    let mut estraneo = setup_body("estraneo", 8);
+    estraneo["code"] = fuori["code"].clone();
+    send(&c.app, Method::POST, "/api/join", Some(estraneo), &[]).await;
+    let (_, list) = c.get("/api/users", &c.admin).await;
+    let estraneo = list["pending"][0]["id"].as_str().unwrap().to_owned();
+
+    // Inviti: solo per la propria classe; richieste di altre classi invisibili.
+    assert_eq!(c.post("/api/invites", json!({"group_id": altra}), &rap).await.0, StatusCode::FORBIDDEN);
+    let (s, inv) = c.post("/api/invites", json!({"group_id": c.group}), &rap).await;
+    assert_eq!(s, StatusCode::OK, "{inv}");
+    let (_, invs) = c.get("/api/invites", &rap).await;
+    assert!(invs["invites"].as_array().unwrap().iter().all(|i| i["group_id"] == c.group.as_str()), "{invs}");
+    let (_, all) = c.get("/api/invites", &c.admin).await;
+    let foreign = all["invites"].as_array().unwrap().iter().find(|i| i["group_id"] == altra.as_str()).unwrap()["id"].as_str().unwrap().to_owned();
+    assert_eq!(c.post(&format!("/api/invites/{foreign}/revoke"), json!({}), &rap).await.0, StatusCode::NOT_FOUND);
+    for action in ["accept", "reject"] {
+        assert_eq!(c.post(&format!("/api/users/{estraneo}/{action}"), json!({}), &rap).await.0, StatusCode::NOT_FOUND, "{action}");
+    }
+    assert!(c.get("/api/users", &rap).await.1["pending"].as_array().unwrap().is_empty());
+
+    // Accetta chi chiede di entrare nella sua classe.
+    let mut body = setup_body("bruno", 4);
+    body["code"] = inv["code"].clone();
+    send(&c.app, Method::POST, "/api/join", Some(body), &[]).await;
+    assert_eq!(c.get("/api/meta", &rap).await.1["pending"], 1);
+    let (_, list) = c.get("/api/users", &rap).await;
+    assert!(list["users"].as_array().unwrap().is_empty(), "la gestione delle persone resta all'admin");
+    let bruno = list["pending"][0]["id"].as_str().unwrap().to_owned();
+    assert_eq!(c.post(&format!("/api/users/{bruno}/accept"), json!({}), &rap).await.0, StatusCode::OK);
+    let (s, _, _) = send(&c.app, Method::PATCH, &format!("/api/users/{aid}"), Some(json!({"role":"nerd"})), &[("cookie", &rap)]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "i ruoli li cambia l'admin");
+
+    // Gruppi: solo dentro la propria classe.
+    for body in [
+        json!({"name":"x","kind":"classe"}),
+        json!({"name":"x","kind":"gruppo"}),
+        json!({"name":"x","kind":"gruppo","parent_id":altra}),
+    ] {
+        assert_eq!(c.post("/api/groups", body.clone(), &rap).await.0, StatusCode::FORBIDDEN, "{body}");
+    }
+    let nuovo = json!({"name":"Laboratorio","kind":"gruppo","parent_id":c.group});
+    assert_eq!(c.post("/api/groups", nuovo.clone(), &anna).await.0, StatusCode::FORBIDDEN);
+    let (s, g) = c.post("/api/groups", nuovo, &rap).await;
+    assert_eq!(s, StatusCode::OK, "{g}");
+    let lab = g["id"].as_str().unwrap().to_owned();
+    let uri = format!("/api/groups/{lab}/members");
+    let put = |uri: String, ids: Value, cookie: String| {
+        let app = c.app.clone();
+        async move { send(&app, Method::PUT, &uri, Some(json!({"user_ids": ids})), &[("cookie", &cookie)]).await.0 }
+    };
+    assert_eq!(put(uri.clone(), json!([rid, estraneo]), rap.clone()).await, StatusCode::BAD_REQUEST, "solo compagni di classe");
+    assert_eq!(put(uri.clone(), json!([rid, aid]), anna.clone()).await, StatusCode::FORBIDDEN);
+    assert_eq!(put(uri.clone(), json!([rid, aid]), rap.clone()).await, StatusCode::OK);
+    assert_eq!(put(format!("/api/groups/{}/members", c.group), json!([rid]), rap.clone()).await, StatusCode::FORBIDDEN, "la classe la gestisce l'admin");
+    assert_eq!(put(format!("/api/groups/{altra}/members"), json!([]), rap.clone()).await, StatusCode::NOT_FOUND);
+    let (_, meta) = c.get("/api/meta", &anna).await;
+    assert_eq!(meta["groups"].as_array().unwrap().len(), 2, "{meta}");
+
+    // Chi esce dalla classe esce anche dai suoi gruppi.
+    send(&c.app, Method::PATCH, &format!("/api/users/{aid}"), Some(json!({"group_ids":[altra, lab]})), &[("cookie", &c.admin)]).await;
+    let (_, meta) = c.get("/api/meta", &anna).await;
+    let names: Vec<_> = meta["groups"].as_array().unwrap().iter().map(|g| g["name"].clone()).collect();
+    assert_eq!(names, [json!("5C")]);
 }
 
 // --- Backup e ripristino ---------------------------------------------------------------------

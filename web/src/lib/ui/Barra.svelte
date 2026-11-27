@@ -19,6 +19,7 @@
         { id: 'calendario', nome: 'Calendario' },
         { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
         ...(app.utente && puoPubblicare(app.utente.role) !== 'no' ? [{ id: 'approvazioni', nome: app.utente.role === 'nerd' ? 'Le mie proposte' : 'Da approvare', numero: app.inbox.to_approve }] : []),
+        ...(app.utente?.role === 'rappresentante' ? [{ id: 'persone', nome: 'Gestione classe', pallino: app.meta?.pending }] : []),
         { id: 'profilo', nome: 'Profilo' },
         { id: 'aspetto', nome: 'Impostazioni' },
       ]

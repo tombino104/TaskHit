@@ -91,6 +91,8 @@
     {#if admin}
       {@render riga('#/persone', 'Persone e gruppi', 'Admin')}
       {@render riga('#/backup', 'Backup', 'Admin')}
+    {:else if utente.role === 'rappresentante'}
+      {@render riga('#/persone', 'Gestione classe', app.meta?.pending ? `${app.meta.pending} in attesa` : 'Inviti e gruppi')}
     {/if}
     <button type="button" class="voce-menu" onclick={() => (foglio = 'privacy')}>
       <span class="serif">Privacy e sicurezza</span>
