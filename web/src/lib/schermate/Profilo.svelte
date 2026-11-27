@@ -6,11 +6,13 @@
   import { api } from '../api';
   import { app, avvisa, esci, leggiProfilo, messaggio, salvaProfilo, sincronizza, type Profilo } from '../store.svelte';
   import { NOMI_RUOLO } from '../events';
+  import { gruppiDiLavoro } from '../lavori';
   import { daChiave, mese, momento } from '../dates';
 
   const utente = $derived(app.utente!);
   const admin = $derived(utente.role === 'admin');
   const mieiGruppi = $derived(app.meta?.groups.filter((g) => g.mine) ?? []);
+  const lavoriAperti = $derived(gruppiDiLavoro(app.meta).filter((g) => !g.work!.closed).length);
   const classe = $derived(mieiGruppi.find((g) => g.kind === 'classe')?.name);
 
   let profilo = $state<Profilo | null>({});
@@ -87,6 +89,9 @@
     {/snippet}
     {@render riga('#/aspetto', 'Aspetto e tema', nomeTema)}
     {#if !admin}{@render riga('#/aspetto', 'Notifiche', 'In arrivo')}{/if}
+    {#if !admin && (utente.role === 'rappresentante' || gruppiDiLavoro(app.meta).length)}
+      {@render riga('#/lavori', 'Gruppi di lavoro', lavoriAperti ? `${lavoriAperti} ${lavoriAperti === 1 ? 'aperto' : 'aperti'}` : 'Nessuno aperto')}
+    {/if}
     {@render riga('#/plugin', 'Plugin', pluginAttivi ? '1 attivo' : 'Nessuno attivo')}
     {#if admin}
       {@render riga('#/persone', 'Persone e gruppi', 'Admin')}

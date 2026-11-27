@@ -116,10 +116,17 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 tx.execute("DELETE FROM inbox WHERE user_id = ?1", params![id])?;
             }
             if let Some(groups) = req.group_ids.as_ref().filter(|_| !admin) {
-                tx.execute("DELETE FROM group_members WHERE user_id = ?1", params![id])?;
+                // I gruppi di lavoro li compongono i rappresentanti: l'admin non li tocca.
+                tx.execute(
+                    "DELETE FROM group_members WHERE user_id = ?1 AND group_id IN (SELECT id FROM groups WHERE expires_at IS NULL)",
+                    params![id],
+                )?;
                 for g in groups {
                     if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1", g)? {
                         return Err(ApiError::BadRequest("il gruppo scelto non esiste"));
+                    }
+                    if crate::work::is_work_group(&tx, g)? {
+                        continue;
                     }
                     tx.execute("INSERT OR IGNORE INTO group_members (group_id, user_id) VALUES (?1, ?2)", params![g, id])?;
                 }
@@ -139,6 +146,12 @@ fn drop_orphan_memberships(c: &Connection) -> Result<(), ApiError> {
         "DELETE FROM group_members WHERE EXISTS (
             SELECT 1 FROM groups g WHERE g.id = group_members.group_id AND g.parent_id IS NOT NULL
                AND NOT EXISTS (SELECT 1 FROM group_members p WHERE p.group_id = g.parent_id AND p.user_id = group_members.user_id))",
+        [],
+    )?;
+    // E chi non fa piu' parte di un gruppo non ne resta capogruppo.
+    c.execute(
+        "UPDATE groups SET leader_id = NULL WHERE leader_id IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = groups.id AND m.user_id = groups.leader_id)",
         [],
     )?;
     Ok(())
@@ -229,7 +242,7 @@ async fn create_group(State(st): State<AppState>, user: AuthUser, Json(req): Jso
                 if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1 AND kind = 'classe'", parent)? {
                     return Err(ApiError::BadRequest("la classe scelta non esiste"));
                 }
-                let n: i64 = tx.query_row("SELECT COUNT(*) FROM groups WHERE parent_id = ?1", params![parent], |r| r.get(0))?;
+                let n: i64 = tx.query_row("SELECT COUNT(*) FROM groups WHERE parent_id = ?1 AND expires_at IS NULL", params![parent], |r| r.get(0))?;
                 if n >= MAX_CLASS_GROUPS {
                     return Err(ApiError::Conflict("questa classe ha gia' troppi gruppi"));
                 }
@@ -269,7 +282,7 @@ async fn set_members(State(st): State<AppState>, user: AuthUser, Path(id): Path<
                 return Err(ApiError::NotFound);
             }
             let parent: Option<String> = tx
-                .query_row("SELECT parent_id FROM groups WHERE id = ?1", params![id], |r| r.get(0))
+                .query_row("SELECT parent_id FROM groups WHERE id = ?1 AND expires_at IS NULL", params![id], |r| r.get(0))
                 .optional()?
                 .ok_or(ApiError::NotFound)?;
             let parent = parent.ok_or(ApiError::Forbidden("i membri di questo gruppo li gestisce l'admin"))?;
@@ -351,7 +364,7 @@ async fn create_invite(State(st): State<AppState>, user: AuthUser, Json(req): Js
             if !common::manages(&managed, &req.group_id) {
                 return Err(ApiError::Forbidden("puoi invitare solo nella tua classe"));
             }
-            if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1", &req.group_id)? {
+            if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1 AND expires_at IS NULL", &req.group_id)? {
                 return Err(ApiError::BadRequest("il gruppo scelto non esiste"));
             }
             tx.execute("UPDATE invites SET revoked_at = ?2 WHERE group_id = ?1 AND revoked_at IS NULL", params![req.group_id, now()])?;

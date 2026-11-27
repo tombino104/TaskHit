@@ -5,12 +5,13 @@
   import { api, type Proposta, type TipoProposta } from '../api';
   import { app, avvisa, messaggio, sincronizza } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
-  import { colore, differenze, etichettaGruppo, gruppoDi, puoPubblicare, riassunto, righeModifiche, testoAvvisi } from '../events';
+  import { colore, differenze, etichettaGruppo, gruppoDi, NOMI_RUOLO, riassunto, righeModifiche, testoAvvisi } from '../events';
   import { daSecondi, dataBreve, orario, quantoFa } from '../dates';
 
   /** Una decisione si può annullare per qualche secondo: parte allo scadere o quando si lascia la pagina. */
   const ATTESA = 6000;
-  const decide = $derived(!!app.utente && puoPubblicare(app.utente.role) === 'diretto');
+  import { decideProposte } from '../lavori';
+  const decide = $derived(!!app.utente && decideProposte(app.utente, app.meta));
 
   let proposte = $state<Proposta[]>([]);
   let caricate = $state(false);
@@ -54,7 +55,8 @@
     return () => { removeEventListener('pagehide', inviaTutte); inviaTutte(); };
   });
 
-  const restanti = $derived(proposte.filter((p) => scelte[p.id] === undefined).length);
+  // Chi decide conta quelle che aspettano lui, non le proprie in attesa di altri.
+  const restanti = $derived(proposte.filter((p) => (!decide || p.can_decide) && scelte[p.id] === undefined).length);
   const AZIONI: Record<TipoProposta, { testo: string; tono: string }> = {
     update: { testo: 'Propone una modifica', tono: 'pieno' },
     create: { testo: 'Propone un nuovo evento', tono: 'accento' },
@@ -82,7 +84,7 @@
       <h1>{decide ? 'Da approvare' : 'Le mie proposte'}</h1>
       {#if caricate}<span class="mono">{restanti ? `${restanti} IN ATTESA` : 'TUTTO FATTO'}</span>{/if}
     </div>
-    <p class="lede">{decide ? 'Proposte dei Nerd in attesa. Decidono i rappresentanti; chi propone riceve l’esito nell’Inbox.' : 'Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.'}</p>
+    <p class="lede">{decide ? 'Proposte in attesa. Nella classe decidono i rappresentanti, nei gruppi di lavoro il capogruppo; chi propone riceve l’esito nell’Inbox.' : 'Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.'}</p>
   </header>
 
   {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
@@ -95,7 +97,7 @@
       <div class="autore">
         <Avatar nome={p.proposer.name} size={32} tono="neutro" />
         <span class="voce">
-          <span class="nome">{p.proposer.name} <span class="ruolo">NERD</span></span>
+          <span class="nome">{p.proposer.name} <span class="ruolo">{NOMI_RUOLO[p.proposer.role].toUpperCase()}</span></span>
           <span class="tenue piccolo">{quantoFa(p.created_at, orologio.adesso)}</span>
         </span>
       </div>
@@ -124,7 +126,9 @@
       {#if p.note}<p class="citazione">«{p.note}»</p>{/if}
       {#if p.stale}<p class="errore">L'evento è cambiato dopo questa proposta: si può solo rifiutare.</p>{/if}
 
-      {#if decide}
+      {#if !p.can_decide}
+        {#if decide}<p class="nota">La tua proposta aspetta una decisione.</p>{/if}
+      {:else}
         {#if fatta}
           <div class="esito" role="status">
             <span><Icona nome="spunta" size={18} spessore={1.8} />{scelte[p.id] ? 'Approvata da te' : 'Rifiutata da te'}</span>

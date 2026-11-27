@@ -7,7 +7,8 @@
   import { api } from '../api';
   import { app, avvisa, messaggio, salvaEvento, sincronizza } from '../store.svelte';
   import { indietro, rotta, sostituisci } from '../router.svelte';
-  import { AVVISI, commuta, puoPubblicare } from '../events';
+  import { AVVISI, commuta, etichettaGruppo, puoPubblicare } from '../events';
+  import { dirittoSu } from '../lavori';
   import { aSecondi, chiave, chiaveDi, chiaveValida, daChiave, dataBreve, ora } from '../dates';
 
   // Il componente viene ricreato a ogni indirizzo (vedi App.svelte): i valori iniziali si leggono una volta.
@@ -15,12 +16,19 @@
   const origine = untrack(() => app.eventi.find((e) => e.id === (modo === 'modifica' ? arg : arg.replace(/^copia-/, ''))));
   const esistente = modo === 'modifica' ? (origine ?? null) : null;
   const ruolo = untrack(() => app.utente!.role);
-  const diritto = puoPubblicare(ruolo);
-  const alunno = diritto === 'no';
+  /** Il ruolo nella classe: decide materie, tipi nuovi e quali tipi valgono per gli eventi privati. */
+  const rappresentante = ruolo === 'rappresentante';
+  const alunno = puoPubblicare(ruolo) === 'no';
   const gruppi = $derived(app.meta?.groups ?? []);
-  const gruppiMiei = untrack(() => app.meta?.groups.filter((g) => g.mine) ?? []);
-  const tipiPermessi = untrack(() => app.meta?.labels.filter((t) => !alunno || t.personal) ?? []);
-  const predefinito = tipiPermessi[0];
+  // Dove si può pubblicare o proporre. Un evento esistente non entra né esce dai gruppi di lavoro.
+  const gruppiMiei = untrack(() => {
+    const io = app.utente!;
+    const possibili = app.meta?.groups.filter((g) => g.mine && dirittoSu(io, g) !== 'no') ?? [];
+    const attuale = app.meta?.groups.find((g) => g.id === origine?.group_id);
+    if (!esistente || !attuale) return possibili;
+    return possibili.filter((g) => (attuale.work ? g.id === attuale.id : !g.work));
+  });
+  const predefinito = untrack(() => app.meta?.labels.find((t) => !alunno || t.personal));
 
   let titolo = $state(origine?.title ?? '');
   let tipo = $state<string | null>(origine?.label_id ?? predefinito?.id ?? null);
@@ -32,7 +40,7 @@
   let per = $state<'classe' | 'alunno'>(origine?.subject_id ? 'alunno' : 'classe');
   let gruppo = $state(origine?.group_id ?? (gruppiMiei.find((g) => g.kind === 'classe') ?? gruppiMiei[0])?.id ?? '');
   let soggetto = $state(origine?.subject_id ?? '');
-  let privato = $state(origine ? origine.privato || alunno : alunno || !gruppiMiei.length);
+  let privato = $state(origine ? origine.privato : alunno || !gruppiMiei.length);
   let avvisi = $state([...(origine?.alerts ?? [])]);
   let descrizione = $state(origine?.description ?? '');
   let nota = $state('');
@@ -42,13 +50,19 @@
 
   const scelto = $derived(app.meta?.labels.find((t) => t.id === tipo));
   const membri = $derived(gruppi.find((g) => g.id === gruppo)?.members ?? []);
+  const destinazione = $derived(gruppi.find((g) => g.id === gruppo));
+  const diritto = $derived(app.utente ? dirittoSu(app.utente, destinazione) : 'no');
   const proposta = $derived(!privato && diritto === 'proposta');
+  // Gli alunni hanno meno tipi per gli eventi privati: tornando privato si sceglie un tipo ammesso.
+  $effect(() => {
+    if (privato && alunno && untrack(() => app.meta?.labels.find((t) => t.id === tipo))?.personal === false) untrack(() => scegliTipo(predefinito?.id ?? ''));
+  });
   const testi = $derived(
     privato ? { nota: alunno ? 'Come alunno puoi aggiungere interrogazioni ed eventi personali. Restano privati.' : 'Evento privato: lo vedi solo tu, anche offline.', cta: 'Salva evento' }
-    : proposta ? { nota: `Sei un Nerd: ${esistente ? 'la modifica sarà applicata' : 'l’evento sarà pubblicato'} quando un rappresentante approva.`, cta: 'Invia per approvazione' }
+    : proposta ? { nota: `${esistente ? 'La modifica sarà applicata' : 'L’evento sarà pubblicato'} quando ${destinazione?.work ? 'il capogruppo' : 'un rappresentante'} approva.`, cta: 'Invia per approvazione' }
     : { nota: 'L’evento sarà visibile subito al gruppo e comparirà nell’Inbox di tutti.', cta: esistente ? 'Salva modifiche' : 'Pubblica evento' },
   );
-  const vietato = modo === 'modifica' && (!esistente || (!esistente.privato && alunno));
+  const vietato = modo === 'modifica' && (!esistente || (!esistente.privato && untrack(() => dirittoSu(app.utente!, app.meta?.groups.find((g) => g.id === esistente.group_id))) === 'no'));
 
   function scegliTipo(id: string) {
     tipo = id;
@@ -123,9 +137,9 @@
         <legend class="dato">Tipo · etichetta</legend>
         <div role="radiogroup" aria-label="Tipo" class="scelte">
           {#each app.meta?.labels ?? [] as t (t.id)}
-            <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === t.id} disabled={alunno && !t.personal} onclick={() => scegliTipo(t.id)}>{t.name}</button>
+            <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === t.id} disabled={privato && alunno && !t.personal} onclick={() => scegliTipo(t.id)}>{t.name}</button>
           {/each}
-          {#if diritto === 'diretto'}
+          {#if rappresentante}
             <button type="button" class="scelta nuova" onclick={() => (nuovoTipo = true)}>+ Nuovo tipo</button>
           {/if}
         </div>
@@ -146,7 +160,7 @@
               <i class="quadratino grande" style:background={m.color}></i>{m.name}
             </button>
           {/each}
-          {#if diritto === 'diretto'}
+          {#if rappresentante}
             <button type="button" class="scelta nuova" onclick={() => (nuovaMateria = true)}>+ Nuovo tag</button>
           {/if}
         </div>
@@ -171,7 +185,7 @@
             <label class="campo">
               <span class="nascosto">Classe o gruppo</span>
               <select bind:value={gruppo} onchange={() => (soggetto = '')}>
-                {#each gruppiMiei as g (g.id)}<option value={g.id}>{g.name}</option>{/each}
+                {#each gruppiMiei as g (g.id)}<option value={g.id}>{etichettaGruppo(g)}</option>{/each}
               </select>
             </label>
           </div>
@@ -192,8 +206,7 @@
         <div role="radiogroup" aria-label="Visibilità" class="visibilita">
           {#each [false, true] as p (p)}
             {@const motivo = esistente && esistente.privato !== p ? 'La visibilità non si cambia dopo la creazione.'
-              : !p && alunno ? 'Non disponibile per gli alunni.'
-              : !p && !gruppiMiei.length ? 'Serve far parte di un gruppo.' : ''}
+              : !p && !gruppiMiei.length ? (alunno ? 'Disponibile solo in un gruppo di lavoro.' : 'Serve far parte di un gruppo.') : ''}
             <button type="button" role="radio" aria-checked={privato === p} disabled={!!motivo} onclick={() => (privato = p)}>
               <Icona nome={p ? 'lucchetto' : 'globo'} size={20} />
               <span class="nome">{p ? 'Privato' : 'Pubblico'}</span>

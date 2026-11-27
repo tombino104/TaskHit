@@ -1,4 +1,4 @@
-//! Proposte dei nerd (in attesa di approvazione) e Inbox delle notifiche.
+//! Proposte in attesa di approvazione (dei nerd, e dei membri dei gruppi di lavoro) e Inbox delle notifiche.
 
 use crate::{
     auth::{self, AuthUser},
@@ -6,6 +6,7 @@ use crate::{
     error::ApiError,
     events::{self, Actor, Data},
     state::AppState,
+    work,
 };
 use axum::{
     Json, Router,
@@ -32,13 +33,8 @@ fn my_groups(c: &Connection, u: &AuthUser) -> Result<HashSet<String>, ApiError> 
     Ok(ids)
 }
 
-/// Per chi approva: le proposte in attesa dei propri gruppi. Per un nerd: le proprie.
+/// Le proposte in attesa che l'utente puo' decidere (rappresentante o capogruppo), piu' le proprie.
 fn pending(c: &Connection, u: &AuthUser) -> Result<Vec<Value>, ApiError> {
-    let right = common::publish_right(&u.role);
-    if right == Publish::No {
-        return Ok(vec![]);
-    }
-    let groups = my_groups(c, u)?;
     let mut stmt = c.prepare(
         "SELECT p.id, p.kind, p.event_id, p.base_rev, p.data, p.note, p.created_at, a.id, a.display_name, a.role
            FROM proposals p JOIN users a ON a.id = p.proposed_by
@@ -53,23 +49,23 @@ fn pending(c: &Connection, u: &AuthUser) -> Result<Vec<Value>, ApiError> {
     let mut out = vec![];
     for (id, kind, event_id, base_rev, data, note, created_at, by_id, by_name, by_role) in rows {
         let Ok(data) = serde_json::from_str::<Data>(&data) else { continue };
-        let visible = if right == Publish::Direct { groups.contains(&data.group_id) } else { by_id == u.id };
-        if !visible {
-            continue;
-        }
         let current = match &event_id {
             Some(e) => events::load(c, e)?,
             None => None,
         };
-        // Un rappresentante non vede una modifica di un evento che appartiene a un gruppo non suo.
-        if right == Publish::Direct && current.as_ref().and_then(|e| e.data.as_ref()).is_some_and(|d| !groups.contains(&d.group_id)) {
+        // Per decidere servono i diritti sul gruppo proposto e su quello in cui l'evento si trova ora.
+        let mut can_decide = work::right(c, u, &data.group_id)? == Publish::Direct;
+        if let Some(d) = current.as_ref().and_then(|e| e.data.as_ref()) {
+            can_decide &= work::right(c, u, &d.group_id)? == Publish::Direct;
+        }
+        if !can_decide && by_id != u.id {
             continue;
         }
         let stale = current.as_ref().is_some_and(|e| e.deleted || Some(e.rev) != base_rev);
         out.push(json!({
             "id": id, "kind": kind, "event_id": event_id, "note": note, "created_at": created_at,
             "proposer": { "id": by_id, "name": by_name, "role": by_role },
-            "data": data, "current": current.and_then(|e| e.data), "stale": stale,
+            "data": data, "current": current.and_then(|e| e.data), "stale": stale, "can_decide": can_decide,
         }));
     }
     Ok(out)
@@ -86,9 +82,7 @@ struct DecideReq {
 }
 
 async fn decide(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<DecideReq>) -> Result<Json<Value>, ApiError> {
-    if common::publish_right(&user.role) != Publish::Direct {
-        return Err(ApiError::Forbidden("solo i rappresentanti decidono sulle proposte"));
-    }
+    common::require_class_member(&user)?;
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
@@ -113,6 +107,13 @@ async fn decide(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 if !common::can_access_group(&tx, &user, &d.group_id)? {
                     return Err(ApiError::NotFound);
                 }
+            }
+            let mut can_decide = work::right(&tx, &user, &data.group_id)? == Publish::Direct;
+            if let Some(d) = current.as_ref().and_then(|e| e.data.as_ref()) {
+                can_decide &= work::right(&tx, &user, &d.group_id)? == Publish::Direct;
+            }
+            if !can_decide {
+                return Err(ApiError::Forbidden("decidono i rappresentanti, o il capogruppo nel suo gruppo"));
             }
             if status != "pending" {
                 return Err(ApiError::Conflict("la proposta e' gia' stata decisa"));
@@ -194,8 +195,7 @@ async fn inbox(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>
                 }
                 items.push(json!({ "id": id, "kind": kind, "event_id": event_id, "at": at, "read": read, "actor": actor, "payload": payload }));
             }
-            let right = common::publish_right(&user.role);
-            let to_approve = if right == Publish::Direct { pending(c, &user)?.len() } else { 0 };
+            let to_approve = pending(c, &user)?.iter().filter(|p| p["can_decide"] == true).count();
             Ok(json!({ "items": items, "unread": unread, "to_approve": to_approve }))
         })
         .await?;

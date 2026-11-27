@@ -1,14 +1,16 @@
 <script lang="ts">
   import { app, avvisa, leggiTutto, messaggio } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
-  import { colore, metaNotifica, puoPubblicare, righeModifiche } from '../events';
+  import { colore, metaNotifica, righeModifiche } from '../events';
+  import { decideProposte, vedeProposte } from '../lavori';
   import { giornoRelativo, ora } from '../dates';
   import type { Notifica } from '../api';
 
   type Filtro = 'tutto' | 'added' | 'modified' | 'deleted';
   let filtro = $state<Filtro>('tutto');
   const FILTRI: [Filtro, string][] = [['tutto', 'Tutto'], ['added', 'Aggiunte'], ['modified', 'Modifiche'], ['deleted', 'Eliminazioni']];
-  const diritto = $derived(app.utente ? puoPubblicare(app.utente.role) : 'no');
+  const proposte = $derived(!!app.utente && vedeProposte(app.utente, app.meta));
+  const decide = $derived(!!app.utente && decideProposte(app.utente, app.meta));
 
   function azione(n: Notifica): { testo: string; tono: 'accento' | 'pieno' | 'tenue' } {
     if (n.kind === 'added') return { testo: '+ Aggiunto', tono: 'accento' };
@@ -50,8 +52,8 @@
 
   <nav aria-label="Sezioni inbox" class="schede">
     <a href="#/inbox" aria-current="page">Notifiche {#if app.inbox.unread}<span class="mono quante">{app.inbox.unread} {app.inbox.unread === 1 ? 'nuova' : 'nuove'}</span>{/if}</a>
-    {#if diritto !== 'no'}
-      <a href="#/approvazioni">{diritto === 'proposta' ? 'Le mie proposte' : 'Da approvare'} {#if app.inbox.to_approve}<span class="pallino">{app.inbox.to_approve}</span>{/if}</a>
+    {#if proposte}
+      <a href="#/approvazioni">{decide ? 'Da approvare' : 'Le mie proposte'} {#if app.inbox.to_approve}<span class="pallino">{app.inbox.to_approve}</span>{/if}</a>
     {/if}
   </nav>
 

@@ -109,6 +109,7 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 | `GET /api/inbox`, `POST /api/inbox/read` | notifiche |
 | `GET /api/meta`, `POST /api/tags`, `POST /api/labels`, `PUT /api/settings`, `PUT /api/plugins/{id}` | materie, etichette, gruppi, impostazioni |
 | `GET /api/users`, `PATCH …/{id}`, `POST …/accept`, `…/reject`, `POST /api/groups` | persone (admin); richieste e gruppi anche ai rappresentanti, per la propria classe (`PUT /api/groups/{id}/members`) |
+| `POST /api/work-groups`, `PUT …/{id}`, `POST …/extend`, `…/close`, `…/delete` | gruppi di lavoro (rappresentanti e capogruppo) |
 | `GET /api/invites`, `POST /api/invites`, `POST …/revoke`, `POST /api/join` | inviti; chi si iscrive resta in attesa dell'admin |
 | `GET /api/backups`, `POST /api/backups`, `PUT …/settings`, `GET …/{nome}`, `POST …/{nome}/delete`, `…/restore`, `POST …/upload`, `POST /api/setup/restore` | backup e ripristino (admin; l'ultimo solo su un'installazione vuota) |
 | `GET /api/me`, `PATCH /api/me`, `POST /api/me/sessions/revoke-others`, `GET /api/admin/status` | profilo e stato del server |
@@ -134,6 +135,8 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 | Modificare eventi pubblici direttamente | — | ✓ | proposta da approvare | — |
 | Interrogazioni ed eventi personali | — | ✓ | ✓ | ✓ |
 | Proporre modifiche agli eventi pubblici | — | — | ✓ | non può |
+
+**Gruppi di lavoro** (`server/src/work.rs`): sono gruppi con `expires_at`, interni a una classe. Li creano i rappresentanti, durano al massimo 90 giorni in tutto e al loro interno conta il capogruppo (`leader_id`), non il ruolo: pubblica e approva; gli altri membri propongono. Li gestiscono rappresentanti della classe e capogruppo; eliminarli subito spetta ai rappresentanti. Gli eventi li ricevono solo i membri e non si spostano da o verso un altro gruppo. Alla scadenza: sola lettura; dopo 30 giorni il server li elimina con eventi e proposte. L'admin non li vede nell'interfaccia né li modifica (resta chi controlla il server: vale la nota sulla fiducia).
 
 I permessi si applicano **sul server** (mai solo nell'interfaccia). Rappresentanti e nerd agiscono solo sui gruppi di cui fanno parte. La visibilità di un evento non si cambia dopo la creazione. Accessi, ruoli, gruppi, inviti e decisioni sulle proposte vanno nell'`audit_log`.
 

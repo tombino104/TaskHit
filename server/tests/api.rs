@@ -7,7 +7,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use std::path::PathBuf;
-use taskhit_server::{auth, backup, build_state, config::Config, router, themes};
+use taskhit_server::{auth, backup, build_state, config::Config, router, themes, work};
 use tower::ServiceExt;
 
 fn app(tweak: impl FnOnce(&mut Config)) -> (Router, PathBuf) {
@@ -724,6 +724,126 @@ async fn representatives_manage_invites_and_groups_of_their_own_class_only() {
     let (_, meta) = c.get("/api/meta", &anna).await;
     let names: Vec<_> = meta["groups"].as_array().unwrap().iter().map(|g| g["name"].clone()).collect();
     assert_eq!(names, [json!("5C")]);
+}
+
+#[tokio::test]
+async fn work_groups_are_temporary_private_and_led_by_their_leader() {
+    let dir = std::env::temp_dir().join(format!("taskhit-test-{}", auth::random_hex(8)));
+    let mut cfg = Config::default();
+    cfg.paths.data_dir = dir.clone();
+    cfg.security.cookie_secure = false;
+    cfg.security.api_requests_per_minute = 10_000;
+    cfg.security.login_attempts_per_minute_ip = 1_000;
+    let state = build_state(cfg).unwrap();
+    let app = router(state.clone());
+    let (_, h, _) = send(&app, Method::POST, "/api/setup", Some(setup_body("admin", 1)), &[]).await;
+    let admin = cookie_of(&h);
+    let (_, _, g) = send(&app, Method::POST, "/api/groups", Some(json!({"name":"4B","kind":"classe"})), &[("cookie", &admin)]).await;
+    let c = Classe { app: app.clone(), admin, group: g["id"].as_str().unwrap().to_owned() };
+    let (rid, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
+    let (aid, anna) = c.iscrivi("anna", "alunno", 3).await;
+    let (lid, luca) = c.iscrivi("luca", "alunno", 4).await;
+    let (_, fuori) = c.iscrivi("marco", "rappresentante", 5).await;
+
+    let body = |groups: Value, days: i64| json!({"class_id": c.group, "activity": "Ricerca", "days": days, "groups": groups});
+    let uno = json!([{"name":"Gruppo 1","member_ids":[aid, lid],"leader_id":aid}]);
+    for who in [&anna, &c.admin] {
+        assert_eq!(c.post("/api/work-groups", body(uno.clone(), 10), who).await.0, StatusCode::FORBIDDEN, "li creano i rappresentanti");
+    }
+    for bad in [
+        body(uno.clone(), 91),
+        body(uno.clone(), 0),
+        body(json!([]), 10),
+        body(json!([{"name":"x","member_ids":[],"leader_id":aid}]), 10),
+        body(json!([{"name":"x","member_ids":[aid],"leader_id":lid}]), 10),
+        body(json!([{"name":"x","member_ids":[aid],"leader_id":aid},{"name":"y","member_ids":[aid],"leader_id":aid}]), 10),
+        body(json!([{"name":"x","member_ids":["0123456789abcdef0123456789abcdef"],"leader_id":"0123456789abcdef0123456789abcdef"}]), 10),
+    ] {
+        assert_eq!(c.post("/api/work-groups", bad.clone(), &rap).await.0, StatusCode::BAD_REQUEST, "{bad}");
+    }
+    let (s, made) = c.post("/api/work-groups", body(uno.clone(), 10), &rap).await;
+    assert_eq!(s, StatusCode::OK, "{made}");
+    let wid = made["ids"][0].as_str().unwrap().to_owned();
+    let (s, again) = c.post("/api/work-groups", body(uno, 10), &rap).await;
+    assert_eq!(s, StatusCode::OK, "stesso nome: si distingue da solo. {again}");
+
+    let find = |meta: &Value, id: &str| meta["groups"].as_array().unwrap().iter().find(|g| g["id"] == id).cloned();
+    let (_, meta) = c.get("/api/meta", &anna).await;
+    let seen = find(&meta, &wid).expect("la capogruppo lo vede");
+    assert_eq!((seen["work"]["leader_id"].clone(), seen["work"]["can_manage"].clone()), (json!(aid), json!(true)));
+    assert!(find(&c.get("/api/meta", &c.admin).await.1, &wid).is_none(), "l'admin non c'entra");
+    assert_eq!(c.post("/api/invites", json!({"group_id": wid}), &c.admin).await.0, StatusCode::BAD_REQUEST);
+
+    // Eventi: il capogruppo pubblica, gli altri propongono a lui; fuori dal gruppo non si vede nulla.
+    let event = json!({"visibility":"public","data":{"group_id": wid, "title": "Fonti", "starts_at": 1_795_500_000}});
+    let (s, b) = c.post("/api/events", event.clone(), &anna).await;
+    assert_eq!((s, b["status"].clone()), (StatusCode::OK, json!("published")), "{b}");
+    let eid = b["id"].as_str().unwrap().to_owned();
+    let (s, p) = c.post("/api/events", event.clone(), &luca).await;
+    assert_eq!((s, p["status"].clone()), (StatusCode::OK, json!("proposed")), "{p}");
+    let decide = format!("/api/proposals/{}/decide", p["id"].as_str().unwrap());
+    for outside in [&rap, &fuori] {
+        assert!(c.eventi(outside).await.is_empty(), "nemmeno i rappresentanti esterni al gruppo");
+        assert_eq!(c.get(&format!("/api/events/{eid}/history"), outside).await.0, StatusCode::NOT_FOUND);
+        assert!(c.get("/api/proposals", outside).await.1["proposals"].as_array().unwrap().is_empty());
+        assert_eq!(c.post(&decide, json!({"approve":true}), outside).await.0, StatusCode::NOT_FOUND);
+        assert!(c.get("/api/inbox", outside).await.1["items"].as_array().unwrap().is_empty());
+    }
+    assert_eq!(c.post("/api/events", event.clone(), &rap).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(c.post(&decide, json!({"approve":true}), &luca).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(c.get("/api/inbox", &anna).await.1["to_approve"], 1);
+    assert_eq!(c.get("/api/proposals", &anna).await.1["proposals"][0]["can_decide"], true);
+    assert_eq!(c.get("/api/proposals", &luca).await.1["proposals"][0]["can_decide"], false);
+    assert_eq!(c.post(&decide, json!({"approve":true}), &anna).await.0, StatusCode::OK);
+    assert_eq!(c.eventi(&luca).await.len(), 2);
+
+    // Un evento non passa dal gruppo di lavoro alla classe.
+    let moved = json!({"rev":1,"data":{"group_id": c.group, "title": "Fonti", "starts_at": 1_795_500_000}});
+    let (s, _, _) = send(&c.app, Method::PUT, &format!("/api/events/{eid}"), Some(moved), &[("cookie", &anna)]).await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // Gestione: capogruppo e rappresentante; il ruolo si puo' passare.
+    let uri = format!("/api/work-groups/{wid}");
+    let put = |who: String, body: Value, uri: String| {
+        let app = c.app.clone();
+        async move { send(&app, Method::PUT, &uri, Some(body), &[("cookie", &who)]).await.0 }
+    };
+    assert_eq!(put(luca.clone(), json!({"member_ids":[lid],"leader_id":lid}), uri.clone()).await, StatusCode::FORBIDDEN);
+    assert_eq!(put(fuori.clone(), json!({"member_ids":[lid],"leader_id":lid}), uri.clone()).await, StatusCode::OK, "anche l'altro rappresentante della classe");
+    assert_eq!(put(anna.clone(), json!({"member_ids":[aid, lid],"leader_id":aid}), uri.clone()).await, StatusCode::NOT_FOUND, "chi e' uscito non lo gestisce");
+    assert_eq!(put(rap.clone(), json!({"member_ids":[aid, lid, rid],"leader_id":aid}), uri.clone()).await, StatusCode::OK);
+    assert_eq!(put(anna.clone(), json!({"member_ids":[aid, lid, rid],"leader_id":lid}), uri.clone()).await, StatusCode::OK, "passa il ruolo");
+    assert_eq!(c.post(&format!("{uri}/delete"), json!({}), &luca).await.0, StatusCode::FORBIDDEN, "il capogruppo chiude, non elimina");
+
+    // L'admin puo' cambiare i gruppi di una persona senza toccare quelli di lavoro.
+    send(&c.app, Method::PATCH, &format!("/api/users/{aid}"), Some(json!({"group_ids":[c.group]})), &[("cookie", &c.admin)]).await;
+    assert!(find(&c.get("/api/meta", &anna).await.1, &wid).is_some());
+
+    // Durata: mai oltre 90 giorni in tutto.
+    assert_eq!(c.post(&format!("{uri}/extend"), json!({"days":81}), &luca).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(c.post(&format!("{uri}/extend"), json!({"days":80}), &luca).await.0, StatusCode::OK);
+
+    // Chiuso: sola lettura, proposte annullate; dopo 30 giorni sparisce con i suoi eventi.
+    let (_, p) = c.post("/api/events", event.clone(), &anna).await;
+    assert_eq!(p["status"], "proposed");
+    assert_eq!(c.post(&format!("{uri}/close"), json!({}), &luca).await.0, StatusCode::OK);
+    assert!(c.get("/api/proposals", &anna).await.1["proposals"].as_array().unwrap().is_empty());
+    assert_eq!(c.eventi(&anna).await.len(), 2, "si consulta ancora");
+    assert_eq!(c.post("/api/events", event.clone(), &luca).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(c.post(&format!("/api/events/{eid}/delete"), json!({"rev":1}), &luca).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(c.post(&format!("{uri}/extend"), json!({"days":1}), &rap).await.0, StatusCode::CONFLICT);
+    assert_eq!(work::purge_expired(&state).await.unwrap(), 0, "non ancora");
+    let later = taskhit_server::ratelimit::now_secs() as i64 + (work::GRACE_DAYS + 1) * 86_400;
+    assert_eq!(state.db.run(move |db| work::purge(db, later)).await.unwrap(), 1, "solo quello chiuso: l'altro scade piu' avanti");
+    assert!(find(&c.get("/api/meta", &anna).await.1, &wid).is_none());
+    assert!(c.eventi(&anna).await.is_empty());
+
+    // Chi lascia la classe lascia i gruppi di lavoro.
+    let other = again["ids"][0].as_str().unwrap().to_owned();
+    send(&c.app, Method::PATCH, &format!("/api/users/{aid}"), Some(json!({"group_ids":[]})), &[("cookie", &c.admin)]).await;
+    let left = find(&c.get("/api/meta", &rap).await.1, &other).unwrap();
+    assert_eq!((left["work"]["leader_id"].clone(), left["members"].as_array().unwrap().len()), (Value::Null, 1));
+    assert_eq!(c.post(&format!("/api/work-groups/{other}/delete"), json!({}), &rap).await.0, StatusCode::OK);
 }
 
 // --- Backup e ripristino ---------------------------------------------------------------------

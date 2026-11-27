@@ -53,7 +53,7 @@ export function riassunto(meta: Meta | null, e: Pick<Campi, 'tag_id' | 'label_id
 }
 
 export const gruppoDi = (meta: Meta | null, id: string | null): Gruppo | undefined => meta?.groups.find((g) => g.id === id);
-export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? 'Gruppo' : g.kind === 'classe' ? `Classe ${g.name}` : `Gruppo ${g.name}`);
+export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? 'Gruppo' : g.kind === 'classe' ? `Classe ${g.name}` : g.work ? g.name : `Gruppo ${g.name}`);
 
 export const NOMI_RUOLO: Record<Ruolo, string> = { admin: 'Admin', rappresentante: 'Rappresentante', nerd: 'Nerd', alunno: 'Alunno' };
 /** Inviti, richieste, gruppi e plugin: admin e rappresentanti. */

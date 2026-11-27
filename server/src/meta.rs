@@ -5,6 +5,7 @@ use crate::{
     common::{self, now},
     error::ApiError,
     state::AppState,
+    work,
 };
 use axum::{
     Json, Router,
@@ -64,12 +65,15 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             let managed = if common::require_manager(&user).is_ok() { Some(common::managed_groups(c, &user)?) } else { None };
             let mut stmt = c.prepare(
                 "SELECT g.id, g.name, g.kind, g.parent_id,
-                        EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1)
-                   FROM groups g ORDER BY g.kind, g.name COLLATE NOCASE",
+                        EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1),
+                        g.created_at, g.expires_at, g.leader_id, g.activity
+                   FROM groups g ORDER BY g.kind, g.expires_at IS NOT NULL, g.activity COLLATE NOCASE, g.name COLLATE NOCASE",
             )?;
-            type Group = (String, String, String, Option<String>, bool);
+            type Group = (String, String, String, Option<String>, bool, i64, Option<i64>, Option<String>, Option<String>);
             let found: Vec<Group> = stmt
-                .query_map(params![user.id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))?
+                .query_map(params![user.id], |r| {
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
+                })?
                 .collect::<Result<_, _>>()?;
             let mut groups = vec![];
             let mut members = c.prepare(
@@ -77,9 +81,25 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                   WHERE m.group_id = ?1 AND u.disabled = 0 AND u.pending = 0 AND u.role <> 'admin' ORDER BY u.display_name COLLATE NOCASE",
             )?;
             let mut pending = 0;
-            for (id, name, kind, parent_id, mine) in found {
-                let manage = managed.as_ref().is_some_and(|set| common::manages(set, &id));
-                if !mine && !manage {
+            for (id, name, kind, parent_id, mine, created_at, expires_at, leader_id, activity) in found {
+                // I gruppi di lavoro li vedono i membri e i rappresentanti della classe: non l'admin.
+                let mut state = Value::Null;
+                let manage = expires_at.is_none() && managed.as_ref().is_some_and(|set| common::manages(set, &id));
+                if let Some(end) = expires_at {
+                    let representative = match &parent_id {
+                        Some(class) => work::represents(c, &user, class)?,
+                        None => false,
+                    };
+                    if user.role == "admin" || (!mine && !representative) || work::deletion_time(end) <= now() {
+                        continue;
+                    }
+                    let leads = mine && leader_id.as_deref() == Some(user.id.as_str());
+                    state = json!({
+                        "activity": activity, "leader_id": leader_id, "created_at": created_at, "expires_at": end,
+                        "max_expires_at": work::max_expiry(created_at), "deletes_at": work::deletion_time(end),
+                        "closed": end <= now(), "representative": representative, "can_manage": representative || leads,
+                    });
+                } else if !mine && !manage {
                     continue;
                 }
                 if manage {
@@ -90,7 +110,7 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                         Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "role": r.get::<_, String>(2)? }))
                     })?
                     .collect::<Result<_, _>>()?;
-                groups.push(json!({ "id": id, "name": name, "kind": kind, "parent_id": parent_id, "mine": mine, "manage": manage, "members": list }));
+                groups.push(json!({ "id": id, "name": name, "kind": kind, "parent_id": parent_id, "mine": mine, "manage": manage, "work": state, "members": list }));
             }
 
             let mut settings = Map::new();

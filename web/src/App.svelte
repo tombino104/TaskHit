@@ -19,6 +19,8 @@
   import Persone from './lib/schermate/Persone.svelte';
   import Backup from './lib/schermate/Backup.svelte';
   import Cerca from './lib/schermate/Cerca.svelte';
+  import Lavori from './lib/schermate/Lavori.svelte';
+  import ComponiLavori from './lib/schermate/ComponiLavori.svelte';
   import ServeHttps from './lib/schermate/ServeHttps.svelte';
 
   /** Ogni quanto si ricontrolla il server mentre l'app è visibile. */
@@ -72,12 +74,13 @@
 
   // L'admin gestisce l'impianto e non ha un calendario: le due parti dell'app non si sovrappongono.
   const COMUNI = ['profilo', 'aspetto', 'plugin'];
-  const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca'];
+  const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca', 'lavori'];
   const DELL_ADMIN = [...COMUNI, 'persone', 'backup'];
   const admin = $derived(app.utente?.role === 'admin');
   const permessa = $derived((admin ? DELL_ADMIN : DELLA_CLASSE).includes(rotta.nome)
     || (rotta.nome === 'persone' && app.utente?.role === 'rappresentante'));
-  const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca']).includes(rotta.nome));
+  const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca', 'lavori']).includes(rotta.nome)
+    && !(rotta.nome === 'lavori' && rotta.arg));
   $effect(() => { if (fase === 'pronta' && app.utente && !permessa) sostituisci(admin ? 'persone' : 'oggi'); });
 </script>
 
@@ -108,6 +111,9 @@
       {:else if rotta.nome === 'persone'}<Persone />
       {:else if rotta.nome === 'backup'}<Backup />
       {:else if rotta.nome === 'cerca'}<Cerca />
+      {:else if rotta.nome === 'lavori' && rotta.arg && app.utente.role === 'rappresentante'}
+        {#key rotta.arg}<ComponiLavori quale={rotta.arg} />{/key}
+      {:else if rotta.nome === 'lavori'}<Lavori />
       {/if}
     </main>
     {#if conMenu}<Menu />{/if}

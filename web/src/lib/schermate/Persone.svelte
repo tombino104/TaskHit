@@ -164,6 +164,7 @@
       {/each}
     </ul>
     <button type="button" class="pulsante tratteggiato" onclick={() => (nuovoGruppo = true)}>+ Nuovo gruppo</button>
+    {#if !admin}<a class="collegamento" href="#/lavori">Gruppi di lavoro temporanei</a>{/if}
     {#if admin}<p class="nota">Per aggiungere o togliere persone da un gruppo, apri il loro ruolo nella scheda Persone.</p>{/if}
 
   {:else}

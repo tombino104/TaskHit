@@ -38,6 +38,7 @@ pub fn routes() -> Router<AppState> {
         .merge(events::routes())
         .merge(proposals::routes())
         .merge(people::routes())
+        .merge(crate::work::routes())
         .merge(meta::routes())
         .merge(crate::backup::routes())
         .fallback(|| async { ApiError::NotFound })

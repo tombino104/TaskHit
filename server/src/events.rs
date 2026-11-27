@@ -8,6 +8,7 @@ use crate::{
     common::{self, Publish, now},
     error::ApiError,
     state::AppState,
+    work,
 };
 use axum::{
     Json, Router,
@@ -232,7 +233,7 @@ pub fn delete_public(c: &Connection, id: &str, rev: i64, d: &Data, who: &Actor<'
     record(c, "deleted", id, who, d, None, None, rev + 1)
 }
 
-/// Registra una proposta di un nerd e avvisa chi puo' approvarla.
+/// Registra una proposta e avvisa chi puo' approvarla: i rappresentanti, o il capogruppo.
 fn propose(c: &Connection, u: &AuthUser, kind: &str, event_id: Option<&str>, base_rev: Option<i64>, d: &Data, note: Option<&str>) -> Result<String, ApiError> {
     let open: i64 = c.query_row("SELECT COUNT(*) FROM proposals WHERE proposed_by = ?1 AND status = 'pending'", params![u.id], |r| r.get(0))?;
     if open >= MAX_PENDING_PROPOSALS {
@@ -248,8 +249,9 @@ fn propose(c: &Connection, u: &AuthUser, kind: &str, event_id: Option<&str>, bas
         "INSERT INTO inbox (id, user_id, kind, event_id, actor_id, diff, created_at)
          SELECT lower(hex(randomblob(16))), u.id, 'proposal', ?1, ?2, ?3, ?4 FROM users u
           WHERE u.disabled = 0 AND u.pending = 0 AND u.id <> ?2
-            AND u.role = 'rappresentante'
-            AND EXISTS (SELECT 1 FROM group_members m WHERE m.user_id = u.id AND m.group_id = ?5)",
+            AND EXISTS (SELECT 1 FROM group_members m JOIN groups g ON g.id = m.group_id
+                         WHERE m.user_id = u.id AND g.id = ?5
+                           AND CASE WHEN g.expires_at IS NULL THEN u.role = 'rappresentante' ELSE g.leader_id = u.id END)",
         params![event_id, u.id, payload, now(), d.group_id],
     )?;
     Ok(id)
@@ -346,16 +348,16 @@ async fn create(State(st): State<AppState>, user: AuthUser, Json(req): Json<Crea
                     json!({ "status": "saved", "id": id })
                 }
                 "public" => {
-                    let right = common::publish_right(&user.role);
-                    if right == Publish::No {
-                        return Err(ApiError::Forbidden("il tuo ruolo permette solo eventi privati"));
-                    }
                     if req.payload.is_some() {
                         return Err(ApiError::BadRequest("un evento pubblico non ha contenuto cifrato"));
                     }
                     let data = clean(&tx, req.data.ok_or(ApiError::BadRequest("mancano i dati dell'evento"))?)?;
                     if !common::can_access_group(&tx, &user, &data.group_id)? {
                         return Err(ApiError::Forbidden("non fai parte di questo gruppo"));
+                    }
+                    let right = work::right(&tx, &user, &data.group_id)?;
+                    if right == Publish::No {
+                        return Err(ApiError::Forbidden(refusal(&tx, &data.group_id)?));
                     }
                     let note = common::optional_text(req.note, 300, "la nota e' troppo lunga")?;
                     if right == Publish::Direct {
@@ -395,6 +397,15 @@ fn visible(c: &Connection, user: &AuthUser, id: &str) -> Result<Stored, ApiError
     if ok { Ok(ev) } else { Err(ApiError::NotFound) }
 }
 
+/// Perche' non si puo' scrivere in un gruppo di cui si fa parte.
+fn refusal(c: &Connection, group_id: &str) -> Result<&'static str, ApiError> {
+    Ok(if work::is_work_group(c, group_id)? {
+        "il gruppo di lavoro e' chiuso: si puo' solo consultare"
+    } else {
+        "il tuo ruolo non permette di modificare gli eventi pubblici"
+    })
+}
+
 const STALE: &str = "l'evento e' stato modificato nel frattempo: ricarica e riprova";
 
 async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<UpdateReq>) -> Result<Json<Value>, ApiError> {
@@ -419,10 +430,6 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 common::log_change(&tx, "event", &id, "upsert", None, Some(&user.id), ev.rev + 1)?;
                 "saved"
             } else {
-                let right = common::publish_right(&user.role);
-                if right == Publish::No {
-                    return Err(ApiError::Forbidden("il tuo ruolo non permette di modificare gli eventi pubblici"));
-                }
                 if req.payload.is_some() {
                     return Err(ApiError::BadRequest("la visibilita' di un evento non si puo' cambiare"));
                 }
@@ -430,10 +437,21 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 if !common::can_access_group(&tx, &user, &data.group_id)? {
                     return Err(ApiError::Forbidden("non fai parte di questo gruppo"));
                 }
+                let old = ev.data.as_ref().ok_or_else(|| ApiError::Internal("evento pubblico senza dati".into()))?;
+                // Gli eventi non entrano ne' escono dai gruppi di lavoro: li vedrebbe chi non deve.
+                if old.group_id != data.group_id && (work::is_work_group(&tx, &old.group_id)? || work::is_work_group(&tx, &data.group_id)?) {
+                    return Err(ApiError::BadRequest("un evento non si sposta da o verso un gruppo di lavoro"));
+                }
+                // Servono i diritti sia sul gruppo di partenza sia su quello di arrivo.
+                let right = match (work::right(&tx, &user, &old.group_id)?, work::right(&tx, &user, &data.group_id)?) {
+                    (Publish::No, _) => return Err(ApiError::Forbidden(refusal(&tx, &old.group_id)?)),
+                    (_, Publish::No) => return Err(ApiError::Forbidden(refusal(&tx, &data.group_id)?)),
+                    (Publish::Direct, Publish::Direct) => Publish::Direct,
+                    _ => Publish::Propose,
+                };
                 if ev.rev != req.rev {
                     return Err(ApiError::Conflict(STALE));
                 }
-                let old = ev.data.as_ref().ok_or_else(|| ApiError::Internal("evento pubblico senza dati".into()))?;
                 let note = common::optional_text(req.note, 300, "la nota e' troppo lunga")?;
                 if right == Publish::Direct {
                     update_public(&tx, &id, ev.rev, old, &data, &Actor { id: &user.id, approver: None })?;
@@ -466,10 +484,13 @@ async fn delete(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
         .run(move |c| {
             let tx = c.transaction()?;
             let ev = visible(&tx, &user, &id)?;
-            let right = common::publish_right(&user.role);
-            if ev.data.is_some() && right == Publish::No {
-                return Err(ApiError::Forbidden("il tuo ruolo non permette di eliminare gli eventi pubblici"));
-            }
+            let right = match &ev.data {
+                Some(d) => match work::right(&tx, &user, &d.group_id)? {
+                    Publish::No => return Err(ApiError::Forbidden(refusal(&tx, &d.group_id)?)),
+                    r => r,
+                },
+                None => Publish::No,
+            };
             if ev.rev != req.rev {
                 return Err(ApiError::Conflict(STALE));
             }

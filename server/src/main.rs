@@ -31,12 +31,17 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Backup automatici: si controlla ogni minuto, e subito all'avvio per recuperare quelli persi.
+    // Ogni minuto, e subito all'avvio: gruppi di lavoro scaduti e backup (recuperando quelli persi).
     let backups = state.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_secs(60));
         loop {
             tick.tick().await;
+            match taskhit_server::work::purge_expired(&backups).await {
+                Ok(0) => {}
+                Ok(n) => tracing::info!("gruppi di lavoro scaduti eliminati: {n}"),
+                Err(e) => tracing::error!("pulizia dei gruppi di lavoro non riuscita: {e:?}"),
+            }
             match taskhit_server::backup::run_due(&backups).await {
                 Ok(Some(item)) => tracing::info!("backup automatico creato: {}", item.name),
                 Ok(None) => {}

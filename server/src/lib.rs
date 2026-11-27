@@ -14,6 +14,7 @@ pub mod secrets;
 pub mod state;
 pub mod themes;
 pub mod web;
+pub mod work;
 
 use axum::{Router, extract::DefaultBodyLimit, http::StatusCode, middleware::from_fn_with_state, response::IntoResponse};
 use config::Config;

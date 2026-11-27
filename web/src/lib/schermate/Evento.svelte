@@ -7,8 +7,9 @@
   import { app, avvisa, eliminaEvento, messaggio } from '../store.svelte';
   import { indietro, rotta, vai } from '../router.svelte';
   import {
-    etichettaGruppo, fraseStoria, gruppoDi, materiaDi, NOMI_RUOLO, puoPubblicare, testoAvvisi, testoSu, tipoDi,
+    etichettaGruppo, fraseStoria, gruppoDi, materiaDi, NOMI_RUOLO, testoAvvisi, testoSu, tipoDi,
   } from '../events';
+  import { dirittoSu } from '../lavori';
   import { daSecondi, dataLunga, maiuscola, meseBreve, momento, nomeGiorno, ora, orario } from '../dates';
 
   const evento = $derived(app.eventi.find((e) => e.id === rotta.arg));
@@ -17,7 +18,9 @@
   const inizio = $derived(evento ? daSecondi(evento.starts_at) : new Date());
   const gruppo = $derived(gruppoDi(app.meta, evento?.group_id ?? null));
   const alunno = $derived(gruppo?.members.find((m) => m.id === evento?.subject_id)?.name);
-  const diritto = $derived(!evento || !app.utente ? 'no' : evento.privato ? 'diretto' : puoPubblicare(app.utente.role));
+  const diritto = $derived(!evento || !app.utente ? 'no' : evento.privato ? 'diretto' : dirittoSu(app.utente, gruppo));
+  /** Chi decide sulle proposte di questo evento. */
+  const approva = $derived(gruppo?.work ? 'il capogruppo' : 'un rappresentante');
   const modificato = $derived(!!evento && evento.rev > 1);
 
   let storia = $state<VoceStoria[]>([]);
@@ -95,7 +98,7 @@
       <h1>{evento.title}</h1>
 
       {#if evento.proposed}
-        <p class="errore">Hai proposto una modifica: aspetta l'approvazione di un rappresentante.</p>
+        <p class="errore">Hai proposto una modifica: aspetta che decida {approva}.</p>
       {/if}
 
       <div class="autore">
@@ -172,7 +175,7 @@
   {:else if foglio === 'elimina'}
     <Foglio titolo={diritto === 'proposta' ? 'Proponi di eliminare' : 'Eliminare?'} onclose={() => { foglio = ''; errore = ''; }}>
       <p class="lede">«{evento.title}», {dataLunga(inizio).toLowerCase()}.
-        {diritto === 'proposta' ? 'L’evento resta finché un rappresentante approva.' : evento.privato ? 'Il contenuto cifrato viene cancellato e non si può recuperare.' : 'Chi fa parte del gruppo riceve una notifica. Non si può annullare.'}</p>
+        {diritto === 'proposta' ? `L’evento resta finché ${approva} approva.` : evento.privato ? 'Il contenuto cifrato viene cancellato e non si può recuperare.' : 'Chi fa parte del gruppo riceve una notifica. Non si può annullare.'}</p>
       {#if diritto === 'proposta'}
         <label class="campo"><span class="dato">Nota per chi approva · facoltativa</span><input bind:value={nota} maxlength="300" placeholder={maiuscola('perché va eliminato?')} /></label>
       {/if}

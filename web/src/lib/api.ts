@@ -53,7 +53,14 @@ export interface Gruppo {
   parent_id: string | null;
   /** Se l'utente ne gestisce inviti e richieste (admin e rappresentanti). */
   manage: boolean;
+  /** Solo per i gruppi di lavoro. */
+  work: Lavoro | null;
 }
+export interface Lavoro {
+  activity: string; leader_id: string | null; created_at: number; expires_at: number; max_expires_at: number; deletes_at: number;
+  closed: boolean; representative: boolean; can_manage: boolean;
+}
+export interface NuoviGruppi { class_id: string; activity: string; days: number; groups: { name: string; member_ids: string[]; leader_id: string }[] }
 export interface Impostazioni { instance_name: string; public_url: string; school_year: string; timezone: string }
 export interface Meta {
   tags: Materia[]; labels: Tipo[]; groups: Gruppo[]; settings: Impostazioni;
@@ -87,7 +94,7 @@ export interface Notifica {
 export interface Inbox { items: Notifica[]; unread: number; to_approve: number }
 export interface Proposta {
   id: string; kind: TipoProposta; event_id: string | null; note: string | null; created_at: number;
-  proposer: { id: string; name: string; role: Ruolo }; data: DatiPubblici; current: DatiPubblici | null; stale: boolean;
+  proposer: { id: string; name: string; role: Ruolo }; data: DatiPubblici; current: DatiPubblici | null; can_decide: boolean; stale: boolean;
 }
 
 export interface Persona { id: string; username: string; display_name: string; role: Ruolo; disabled: boolean; group_ids: string[] }
@@ -158,6 +165,11 @@ export const api = {
   rifiuta: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/reject`, {}),
   creaGruppo: (name: string, kind: Gruppo['kind'], parent_id?: string) => call<{ id: string }>('POST', '/api/groups', { name, kind, parent_id }),
   salvaMembri: (groupId: string, user_ids: string[]) => call<Ok>('PUT', `/api/groups/${id(groupId)}/members`, { user_ids }),
+  creaGruppiLavoro: (b: NuoviGruppi) => call<{ ids: string[] }>('POST', '/api/work-groups', b),
+  salvaGruppoLavoro: (groupId: string, member_ids: string[], leader_id: string) => call<Ok>('PUT', `/api/work-groups/${id(groupId)}`, { member_ids, leader_id }),
+  prorogaGruppo: (groupId: string, days: number) => call<Ok>('POST', `/api/work-groups/${id(groupId)}/extend`, { days }),
+  chiudiGruppo: (groupId: string) => call<Ok>('POST', `/api/work-groups/${id(groupId)}/close`, {}),
+  eliminaGruppo: (groupId: string) => call<Ok>('POST', `/api/work-groups/${id(groupId)}/delete`, {}),
   inviti: () => call<{ invites: Invito[] }>('GET', '/api/invites'),
   creaInvito: (group_id: string) => call<{ code: string }>('POST', '/api/invites', { group_id }),
   revocaInvito: (inviteId: string) => call<Ok>('POST', `/api/invites/${id(inviteId)}/revoke`, {}),

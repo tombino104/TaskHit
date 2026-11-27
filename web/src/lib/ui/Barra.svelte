@@ -3,7 +3,8 @@
   import Avatar from './Avatar.svelte';
   import { app } from '../store.svelte';
   import { rotta } from '../router.svelte';
-  import { NOMI_RUOLO, puoPubblicare } from '../events';
+  import { NOMI_RUOLO } from '../events';
+  import { decideProposte, gruppiDiLavoro, vedeProposte } from '../lavori';
 
   const admin = $derived(app.utente?.role === 'admin');
   const sezioni = $derived((admin
@@ -18,7 +19,8 @@
         { id: 'oggi', nome: 'Oggi' },
         { id: 'calendario', nome: 'Calendario' },
         { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
-        ...(app.utente && puoPubblicare(app.utente.role) !== 'no' ? [{ id: 'approvazioni', nome: app.utente.role === 'nerd' ? 'Le mie proposte' : 'Da approvare', numero: app.inbox.to_approve }] : []),
+        ...(app.utente && vedeProposte(app.utente, app.meta) ? [{ id: 'approvazioni', nome: decideProposte(app.utente, app.meta) ? 'Da approvare' : 'Le mie proposte', numero: app.inbox.to_approve }] : []),
+        ...(app.utente?.role === 'rappresentante' || gruppiDiLavoro(app.meta).length ? [{ id: 'lavori', nome: 'Gruppi di lavoro' }] : []),
         ...(app.utente?.role === 'rappresentante' ? [{ id: 'persone', nome: 'Gestione classe', pallino: app.meta?.pending }] : []),
         { id: 'profilo', nome: 'Profilo' },
         { id: 'aspetto', nome: 'Impostazioni' },

@@ -41,7 +41,8 @@ pub fn require_representative(u: &AuthUser) -> Result<(), ApiError> {
 }
 
 /// Gruppi di cui l'utente gestisce inviti e richieste; `None` = tutti (admin).
-/// Un rappresentante gestisce le classi di cui fa parte e i gruppi creati al loro interno.
+/// Un rappresentante gestisce le classi di cui fa parte e i gruppi permanenti creati al loro interno.
+/// I gruppi di lavoro hanno regole proprie (vedi `work`).
 pub fn managed_groups(c: &Connection, u: &AuthUser) -> Result<Option<HashSet<String>>, ApiError> {
     if u.role == "admin" {
         return Ok(None);
@@ -49,7 +50,7 @@ pub fn managed_groups(c: &Connection, u: &AuthUser) -> Result<Option<HashSet<Str
     require_manager(u)?;
     let mut stmt = c.prepare(
         "WITH mie AS (SELECT g.id FROM groups g JOIN group_members m ON m.group_id = g.id WHERE m.user_id = ?1 AND g.kind = 'classe')
-         SELECT id FROM mie UNION SELECT id FROM groups WHERE parent_id IN (SELECT id FROM mie)",
+         SELECT id FROM mie UNION SELECT id FROM groups WHERE parent_id IN (SELECT id FROM mie) AND expires_at IS NULL",
     )?;
     let ids = stmt.query_map(params![u.id], |r| r.get(0))?.collect::<Result<_, _>>()?;
     Ok(Some(ids))
