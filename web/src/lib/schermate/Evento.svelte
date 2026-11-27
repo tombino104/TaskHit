@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Avatar from '../ui/Avatar.svelte';
   import Foglio from '../ui/Foglio.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -20,7 +21,7 @@
   const alunno = $derived(gruppo?.members.find((m) => m.id === evento?.subject_id)?.name);
   const diritto = $derived(!evento || !app.utente ? 'no' : evento.privato ? 'diretto' : dirittoSu(app.utente, gruppo));
   /** Chi decide sulle proposte di questo evento. */
-  const approva = $derived(gruppo?.work ? 'il capogruppo' : 'un rappresentante');
+  const approva = $derived(gruppo?.work ? t('il capogruppo') : t('un rappresentante'));
   const modificato = $derived(!!evento && evento.rev > 1);
 
   let storia = $state<VoceStoria[]>([]);
@@ -38,8 +39,8 @@
   const cronologia = $derived.by(() => {
     if (!evento) return [];
     if (!evento.privato) return storia.map((v) => ({ at: v.at, testo: fraseStoria(app.meta, v) }));
-    const voci = [{ at: evento.created_at, testo: "Hai creato l'evento." }];
-    if (modificato) voci.unshift({ at: evento.updated_at, testo: "Hai modificato l'evento." });
+    const voci = [{ at: evento.created_at, testo: t('Hai creato l\'evento.') }];
+    if (modificato) voci.unshift({ at: evento.updated_at, testo: t('Hai modificato l\'evento.') });
     return voci;
   });
 
@@ -54,7 +55,7 @@
     try {
       const esito = await eliminaEvento(evento, nota.trim() || undefined);
       foglio = '';
-      avvisa(esito === 'proposed' ? 'Proposta di eliminazione inviata.' : 'Evento eliminato.');
+      avvisa(esito === 'proposed' ? t('Proposta di eliminazione inviata.') : t('Evento eliminato.'));
       indietro('oggi');
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
   }
@@ -62,9 +63,9 @@
 
 {#if !evento}
   <div class="schermata">
-    <button type="button" class="torna" onclick={() => indietro()}><Icona nome="sinistra" size={20} />Indietro</button>
-    <h1 class="titolo">Evento non disponibile</h1>
-    <p class="lede">Forse è stato eliminato, oppure è un evento privato ancora bloccato.</p>
+    <button type="button" class="torna" onclick={() => indietro()}><Icona nome="sinistra" size={20} />{t('Indietro')}</button>
+    <h1 class="titolo">{t('Evento non disponibile')}</h1>
+    <p class="lede">{t('Forse è stato eliminato, oppure è un evento privato ancora bloccato.')}</p>
     <Sblocco />
   </div>
 {:else}
@@ -72,8 +73,8 @@
     <header style:background={tinta} style:color={testoSu(tinta)}>
       <div class="interno">
         <div class="comandi">
-          <button type="button" class="cerchio" aria-label="Indietro" onclick={() => indietro()}><Icona nome="sinistra" size={20} spessore={1.6} /></button>
-          <button type="button" class="cerchio" aria-label="Altre azioni" onclick={() => (foglio = 'azioni')}><Icona nome="altro" size={20} /></button>
+          <button type="button" class="cerchio" aria-label={t('Indietro')} onclick={() => indietro()}><Icona nome="sinistra" size={20} spessore={1.6} /></button>
+          <button type="button" class="cerchio" aria-label={t('Altre azioni')} onclick={() => (foglio = 'azioni')}><Icona nome="altro" size={20} /></button>
         </div>
         <div class="quando">
           <div class="giorno">
@@ -91,50 +92,50 @@
 
     <div class="corpo">
       <div class="etichette">
-        <span class="dato tipo">{[tipoDi(app.meta, evento.label_id)?.name ?? 'Evento', evento.sub_kind].filter(Boolean).join(' · ')}</span>
+        <span class="dato tipo">{[t(tipoDi(app.meta, evento.label_id)?.name ?? 'Evento'), evento.sub_kind && t(evento.sub_kind)].filter(Boolean).join(' · ')}</span>
         {#if materia}<span class="dato materia"><i class="quadratino" style:background={materia.color}></i>{materia.name}</span>{/if}
       </div>
 
       <h1>{evento.title}</h1>
 
       {#if evento.proposed}
-        <p class="errore">Hai proposto una modifica: aspetta che decida {approva}.</p>
+        <p class="errore">{t('Hai proposto una modifica: aspetta che decida {chi}.', { chi: approva })}</p>
       {/if}
 
       <div class="autore">
         <Avatar nome={evento.created_by.name} persona={evento.created_by.id} size={34} />
         <div>
-          <span><strong>{evento.created_by.name}</strong> · {NOMI_RUOLO[evento.created_by.role]} · creato il {momento(evento.created_at).split(',')[0]}</span>
+          <span><strong>{evento.created_by.name}</strong> · {NOMI_RUOLO[evento.created_by.role]} · {t('creato il {data}', { data: momento(evento.created_at).split(',')[0] })}</span>
           {#if modificato}
-            <span class="tenue">Modificato da {evento.updated_by.name} ({NOMI_RUOLO[evento.updated_by.role]}) il {momento(evento.updated_at)}{evento.approved_by ? ' · approvato' : ''}</span>
+            <span class="tenue">{t('Modificato da {nome} ({ruolo}) il {quando}', { nome: evento.updated_by.name, ruolo: NOMI_RUOLO[evento.updated_by.role], quando: momento(evento.updated_at) })}{evento.approved_by ? t(' · approvato') : ''}</span>
           {/if}
         </div>
       </div>
 
       <dl class="scheda-dati">
-        <dt>Quando</dt>
+        <dt>{t('Quando')}</dt>
         <dd>{dataLunga(inizio)}, {orario(evento.starts_at, evento.ends_at)}</dd>
-        <dt>Per</dt>
-        <dd>{evento.privato ? 'Solo tu' : alunno ? `${alunno} · ${etichettaGruppo(gruppo)}` : etichettaGruppo(gruppo)}</dd>
-        <dt>Visibilità</dt>
+        <dt>{t('Per')}</dt>
+        <dd>{evento.privato ? t('Solo tu') : alunno ? `${alunno} · ${etichettaGruppo(gruppo)}` : etichettaGruppo(gruppo)}</dd>
+        <dt>{t('Visibilità')}</dt>
         <dd>
           <Icona nome={evento.privato ? 'lucchetto' : 'globo'} size={16} />
-          {evento.privato ? 'Privato, lo vedi solo tu' : gruppo?.kind === 'gruppo' ? 'Pubblico, lo vede tutto il gruppo' : 'Pubblico, lo vede tutta la classe'}
+          {evento.privato ? t('Privato, lo vedi solo tu') : gruppo?.kind === 'gruppo' ? t('Pubblico, lo vede tutto il gruppo') : t('Pubblico, lo vede tutta la classe')}
         </dd>
-        <dt>Avviso</dt>
+        <dt>{t('Avviso')}</dt>
         <dd>{testoAvvisi(evento.alerts)}</dd>
       </dl>
 
       {#if evento.description}
         <section class="argomento">
-          <h2 class="dato">Argomento</h2>
+          <h2 class="dato">{t('Argomento')}</h2>
           <p>{evento.description}</p>
         </section>
       {/if}
 
       {#if cronologia.length}
         <section class="cronologia">
-          <h2 class="dato">Cronologia</h2>
+          <h2 class="dato">{t('Cronologia')}</h2>
           <ol>
             {#each cronologia as v, i (i)}
               <li>
@@ -150,38 +151,38 @@
   </article>
 
   {#if diritto !== 'no'}
-    <div role="toolbar" aria-label="Azioni evento" class="strumenti">
-      <a href="#/modifica/{evento.id}" class="modifica"><Icona nome="matita" size={18} spessore={1.6} />{diritto === 'proposta' ? 'Proponi modifica' : 'Modifica'}</a>
+    <div role="toolbar" aria-label={t('Azioni evento')} class="strumenti">
+      <a href="#/modifica/{evento.id}" class="modifica"><Icona nome="matita" size={18} spessore={1.6} />{diritto === 'proposta' ? t('Proponi modifica') : t('Modifica')}</a>
       <span aria-hidden="true"></span>
-      <button type="button" aria-label="Promemoria" onclick={() => (foglio = 'avvisi')}><Icona nome="campana" size={19} spessore={1.6} /></button>
+      <button type="button" aria-label={t('Promemoria')} onclick={() => (foglio = 'avvisi')}><Icona nome="campana" size={19} spessore={1.6} /></button>
       <span aria-hidden="true"></span>
-      <button type="button" aria-label={diritto === 'proposta' ? "Proponi di eliminare l'evento" : 'Elimina evento'} onclick={() => (foglio = 'elimina')}><Icona nome="cestino" size={19} spessore={1.6} /></button>
+      <button type="button" aria-label={diritto === 'proposta' ? t('Proponi di eliminare l\'evento') : t('Elimina evento')} onclick={() => (foglio = 'elimina')}><Icona nome="cestino" size={19} spessore={1.6} /></button>
     </div>
   {/if}
 
   {#if foglio === 'azioni'}
-    <Foglio titolo="Azioni" onclose={() => (foglio = '')}>
-      <button type="button" class="pulsante grande" onclick={() => vai(`nuovo/copia-${evento.id}`)}>Duplica evento</button>
+    <Foglio titolo={t('Azioni')} onclose={() => (foglio = '')}>
+      <button type="button" class="pulsante grande" onclick={() => vai(`nuovo/copia-${evento.id}`)}>{t('Duplica evento')}</button>
       {#if diritto !== 'no'}
-        <button type="button" class="pulsante grande" onclick={() => (foglio = 'elimina')}>{diritto === 'proposta' ? 'Proponi di eliminarlo' : 'Elimina evento'}</button>
+        <button type="button" class="pulsante grande" onclick={() => (foglio = 'elimina')}>{diritto === 'proposta' ? t('Proponi di eliminarlo') : t('Elimina evento')}</button>
       {/if}
     </Foglio>
   {:else if foglio === 'avvisi'}
-    <Foglio titolo="Promemoria" onclose={() => (foglio = '')}>
-      <p class="lede">Avvisi scelti: <strong>{testoAvvisi(evento.alerts)}</strong>.</p>
-      <p class="nota">Le notifiche sul dispositivo arrivano in una prossima versione: per ora l'avviso viene solo salvato con l'evento.</p>
-      <a href="#/modifica/{evento.id}" class="pulsante pieno grande">Cambia avvisi</a>
+    <Foglio titolo={t('Promemoria')} onclose={() => (foglio = '')}>
+      <p class="lede">{t('Avvisi scelti:')} <strong>{testoAvvisi(evento.alerts)}</strong>.</p>
+      <p class="nota">{t('Le notifiche sul dispositivo arrivano in una prossima versione: per ora l\'avviso viene solo salvato con l\'evento.')}</p>
+      <a href="#/modifica/{evento.id}" class="pulsante pieno grande">{t('Cambia avvisi')}</a>
     </Foglio>
   {:else if foglio === 'elimina'}
-    <Foglio titolo={diritto === 'proposta' ? 'Proponi di eliminare' : 'Eliminare?'} onclose={() => { foglio = ''; errore = ''; }}>
+    <Foglio titolo={diritto === 'proposta' ? t('Proponi di eliminare') : t('Eliminare?')} onclose={() => { foglio = ''; errore = ''; }}>
       <p class="lede">«{evento.title}», {dataLunga(inizio).toLowerCase()}.
-        {diritto === 'proposta' ? `L’evento resta finché ${approva} approva.` : evento.privato ? 'Il contenuto cifrato viene cancellato e non si può recuperare.' : 'Chi fa parte del gruppo riceve una notifica. Non si può annullare.'}</p>
+        {diritto === 'proposta' ? t('L’evento resta finché {chi} approva.', { chi: approva }) : evento.privato ? t('Il contenuto cifrato viene cancellato e non si può recuperare.') : t('Chi fa parte del gruppo riceve una notifica. Non si può annullare.')}</p>
       {#if diritto === 'proposta'}
-        <label class="campo"><span class="dato">Nota per chi approva · facoltativa</span><input bind:value={nota} maxlength="300" placeholder={maiuscola('perché va eliminato?')} /></label>
+        <label class="campo"><span class="dato">{t('Nota per chi approva · facoltativa')}</span><input bind:value={nota} maxlength="300" placeholder={maiuscola(t('perché va eliminato?'))} /></label>
       {/if}
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
       <button type="button" class="pulsante pieno grande" disabled={occupato || !app.online} aria-busy={occupato} onclick={elimina}>
-        {diritto === 'proposta' ? 'Invia per approvazione' : 'Elimina evento'}
+        {diritto === 'proposta' ? t('Invia per approvazione') : t('Elimina evento')}
       </button>
     </Foglio>
   {/if}

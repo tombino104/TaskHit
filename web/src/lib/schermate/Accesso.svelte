@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Lingue from '../ui/Lingue.svelte';
+  import { t } from '../i18n';
   // Accesso e richiesta di iscrizione con codice invito (#/entra/CODICE).
   import Blocco from '../ui/Blocco.svelte';
   import ChiaveRecupero from '../ui/ChiaveRecupero.svelte';
@@ -36,14 +38,14 @@
       sostituisci('oggi');
     } catch (e) {
       if (e instanceof ApiError && e.blocco) blocco = e.blocco;
-      else errore = e instanceof ApiError && e.status === 401 ? (vecchio ? 'Nome utente o password errati.' : 'Nome, cognome o password errati.') : messaggio(e);
+      else errore = e instanceof ApiError && e.status === 401 ? (vecchio ? t('Nome utente o password errati.') : t('Nome, cognome o password errati.')) : messaggio(e);
     } finally { occupato = false; }
   }
 
   async function iscriviti(ev: SubmitEvent) {
     ev.preventDefault(); errore = '';
-    if (password.length < 10) { errore = 'La password deve avere almeno 10 caratteri.'; return; }
-    if (password !== password2) { errore = 'Le password non coincidono.'; return; }
+    if (password.length < 10) { errore = t('La password deve avere almeno 10 caratteri.'); return; }
+    if (password !== password2) { errore = t('Le password non coincidono.'); return; }
     occupato = true;
     try {
       const k = await preparaChiavi(password, kdf ?? undefined);
@@ -60,49 +62,50 @@
 {:else if inviata}
   <div class="schermata">
     <span class="marchio">TaskHit</span>
-    <span class="dato">Richiesta inviata</span>
-    <h1>Manca solo la conferma</h1>
-    <p class="lede">L'admin deve accettare la tua richiesta. Dopo potrai entrare con nome, cognome e password.</p>
-    <button type="button" class="pulsante pieno grande" onclick={() => { inviata = false; sostituisci('accesso'); }}>Vai all'accesso</button>
+    <span class="dato">{t('Richiesta inviata')}</span>
+    <h1>{t('Manca solo la conferma')}</h1>
+    <p class="lede">{t('L\'admin deve accettare la tua richiesta. Dopo potrai entrare con nome, cognome e password.')}</p>
+    <button type="button" class="pulsante pieno grande" onclick={() => { inviata = false; sostituisci('accesso'); }}>{t('Vai all\'accesso')}</button>
   </div>
 {:else}
   <div class="schermata accesso">
     <div class="testa">
       <span class="marchio">TaskHit</span>
-      <span class="dato">{app.online ? (entra ? 'Invito' : 'Accesso') : 'Offline'}</span>
+      <span class="dato">{app.online ? (entra ? t('Invito') : t('Accesso')) : t('Offline')}</span>
     </div>
     <header>
-      <h1>{entra ? 'Entra nella classe' : 'Bentornato'}</h1>
-      <p class="lede">{entra ? 'Con il codice invito chiedi di entrare come alunno. La password non lascia mai questo dispositivo.' : app.meta?.settings.instance_name || 'Il calendario condiviso della classe.'}</p>
+      <h1>{entra ? t('Entra nella classe') : t('Bentornato')}</h1>
+      <p class="lede">{entra ? t('Con il codice invito chiedi di entrare come alunno. La password non lascia mai questo dispositivo.') : app.meta?.settings.instance_name || t('Il calendario condiviso della classe.')}</p>
     </header>
 
     <form onsubmit={entra ? iscriviti : login}>
       {#if entra}
-        <label class="campo"><span class="dato">Codice invito</span><input class="mono" bind:value={codice} required autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXX-XXX-XXX" /></label>
+        <label class="campo"><span class="dato">{t('Codice invito')}</span><input class="mono" bind:value={codice} required autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXX-XXX-XXX" /></label>
       {/if}
       {#if vecchio && !entra}
-        <label class="campo"><span class="dato">Nome utente</span><input class="mono" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+        <label class="campo"><span class="dato">{t('Nome utente')}</span><input class="mono" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
       {:else}
-        <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
-        <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" /></label>
+        <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+        <label class="campo"><span class="dato">{t('Cognome')}</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" /></label>
       {/if}
-      <label class="campo"><span class="dato">Password</span><input type="password" bind:value={password} required autocomplete={entra ? 'new-password' : 'current-password'} placeholder={entra ? 'Almeno 10 caratteri' : ''} /></label>
+      <label class="campo"><span class="dato">{t('Password')}</span><input type="password" bind:value={password} required autocomplete={entra ? 'new-password' : 'current-password'} placeholder={entra ? t('Almeno 10 caratteri') : ''} /></label>
       {#if entra}
-        <label class="campo"><span class="dato">Ripeti password</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>
+        <label class="campo"><span class="dato">{t('Ripeti password')}</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>
       {/if}
       {#if blocco}<Blocco {blocco} />{/if}
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
       <button class="pulsante pieno grande" disabled={occupato || !app.online} aria-busy={occupato}>
-        {occupato ? 'Derivo le chiavi…' : entra ? 'Chiedi di entrare' : 'Entra'}
+        {occupato ? t('Derivo le chiavi…') : entra ? t('Chiedi di entrare') : t('Entra')}
       </button>
     </form>
 
     {#if entra}
-      <a href="#/accesso" class="collegamento">Ho già un account</a>
+      <a href="#/accesso" class="collegamento">{t('Ho già un account')}</a>
     {:else}
-      <a href="#/entra" class="collegamento">Hai un codice invito?</a>
-      <button type="button" class="collegamento vecchio" onclick={() => { vecchio = !vecchio; errore = ''; blocco = null; }}>{vecchio ? 'Entra con nome e cognome' : 'Avevi un nome utente?'}</button>
+      <a href="#/entra" class="collegamento">{t('Hai un codice invito?')}</a>
+      <button type="button" class="collegamento vecchio" onclick={() => { vecchio = !vecchio; errore = ''; blocco = null; }}>{vecchio ? t('Entra con nome e cognome') : t('Avevi un nome utente?')}</button>
     {/if}
+    <Lingue />
   </div>
 {/if}
 

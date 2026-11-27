@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // I compagni di classe, con foto e ruolo. I rappresentanti da qui moderano alunni e nerd.
   import Avatar from '../ui/Avatar.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -25,37 +26,37 @@
 </script>
 
 <div class="schermata con-menu classe">
-  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
-  <h1 class="titolo sottolineato">La mia classe</h1>
+  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />{t('Profilo')}</a>
+  <h1 class="titolo sottolineato">{t('La mia classe')}</h1>
   {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
 
   {#each classi as c (c.id)}
     <section aria-label={c.name}>
-      <h2 class="dato">{c.name} · {c.members.length} {c.members.length === 1 ? 'persona' : 'persone'}</h2>
+      <h2 class="dato">{c.name} · {c.members.length === 1 ? t('1 persona') : t('{n} persone', { n: c.members.length })}</h2>
       <ul class="elenco">
         {#each c.members as m (m.id)}
           <li>
             <Avatar nome={m.name} persona={m.id} size={48} tono={m.role === 'rappresentante' ? 'tenue' : 'neutro'} />
-            <span class="voce chi"><span>{m.name}{m.id === app.utente?.id ? ' (tu)' : ''}</span><span class="tenue">{NOMI_RUOLO[m.role]}{moderabile(m.id)?.renaming ? ' · deve cambiare nome' : ''}</span></span>
-            {#if moderabile(m.id)}<button type="button" class="collegamento" aria-label="Modera {m.name}" onclick={() => (scelto = moderabile(m.id)!)}>Modera</button>{/if}
+            <span class="voce chi"><span>{m.name}{m.id === app.utente?.id ? t(' (tu)') : ''}</span><span class="tenue">{NOMI_RUOLO[m.role]}{moderabile(m.id)?.renaming ? t(' · deve cambiare nome') : ''}</span></span>
+            {#if moderabile(m.id)}<button type="button" class="collegamento" aria-label={t('Modera {nome}', { nome: m.name })} onclick={() => (scelto = moderabile(m.id)!)}>{t('Modera')}</button>{/if}
           </li>
         {/each}
       </ul>
     </section>
   {:else}
-    <p class="lede">Non fai ancora parte di una classe.</p>
+    <p class="lede">{t('Non fai ancora parte di una classe.')}</p>
   {/each}
 
   {#if rappresentante && sospesi.length}
-    <section aria-label="Sospesi">
-      <h2 class="dato">Sospesi</h2>
+    <section aria-label={t('Sospesi')}>
+      <h2 class="dato">{t('Sospesi')}</h2>
       <ul class="elenco">
         {#each sospesi as p (p.id)}
           <li>
             <Avatar nome={p.name} persona={p.id} foto={p.photo} size={48} tono="neutro" />
             <span class="voce chi"><span>{p.name}</span><span class="tenue">{statoBlocco(p.block!)}</span></span>
-            {#if p.can_moderate}<button type="button" class="collegamento" aria-label="Modera {p.name}" onclick={() => (scelto = p)}>Modera</button>
-            {:else}<span class="nota">Deciso dall’admin</span>{/if}
+            {#if p.can_moderate}<button type="button" class="collegamento" aria-label={t('Modera {nome}', { nome: p.name })} onclick={() => (scelto = p)}>{t('Modera')}</button>
+            {:else}<span class="nota">{t('Deciso dall’admin')}</span>{/if}
           </li>
         {/each}
       </ul>

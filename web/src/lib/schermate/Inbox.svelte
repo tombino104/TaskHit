@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import { app, avvisa, leggiTutto, messaggio } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
   import { colore, metaNotifica, righeModifiche } from '../events';
@@ -8,21 +9,21 @@
 
   type Filtro = 'tutto' | 'added' | 'modified' | 'deleted';
   let filtro = $state<Filtro>('tutto');
-  const FILTRI: [Filtro, string][] = [['tutto', 'Tutto'], ['added', 'Aggiunte'], ['modified', 'Modifiche'], ['deleted', 'Eliminazioni']];
+  const FILTRI: [Filtro, string][] = [['tutto', t('Tutto')], ['added', t('Aggiunte')], ['modified', t('Modifiche')], ['deleted', t('Eliminazioni')]];
   const proposte = $derived(!!app.utente && vedeProposte(app.utente, app.meta));
   const decide = $derived(!!app.utente && decideProposte(app.utente, app.meta));
 
   function azione(n: Notifica): { testo: string; tono: 'accento' | 'pieno' | 'tenue' } {
-    if (n.kind === 'added') return { testo: '+ Aggiunto', tono: 'accento' };
-    if (n.kind === 'modified') return { testo: '→ Modificato', tono: 'pieno' };
-    if (n.kind === 'deleted') return { testo: '× Eliminato', tono: 'tenue' };
-    if (n.kind === 'proposal') return { testo: '? Da approvare', tono: 'accento' };
-    return n.payload.outcome === 'approved' ? { testo: '✓ Proposta approvata', tono: 'pieno' } : { testo: '× Proposta rifiutata', tono: 'tenue' };
+    if (n.kind === 'added') return { testo: t('+ Aggiunto'), tono: 'accento' };
+    if (n.kind === 'modified') return { testo: t('→ Modificato'), tono: 'pieno' };
+    if (n.kind === 'deleted') return { testo: t('× Eliminato'), tono: 'tenue' };
+    if (n.kind === 'proposal') return { testo: t('? Da approvare'), tono: 'accento' };
+    return n.payload.outcome === 'approved' ? { testo: t('✓ Proposta approvata'), tono: 'pieno' } : { testo: t('× Proposta rifiutata'), tono: 'tenue' };
   }
   const chi = (n: Notifica): string => {
-    if (n.kind === 'proposal') return `proposta di ${n.actor ?? 'qualcuno'}`;
-    if (n.kind === 'decision') return `da ${n.actor ?? 'qualcuno'}`;
-    return n.payload.approver ? `proposta da ${n.actor} · approvata da ${n.payload.approver}` : `da ${n.actor ?? 'qualcuno'}`;
+    if (n.kind === 'proposal') return t('proposta di {chi}', { chi: n.actor ?? t('qualcuno') });
+    if (n.kind === 'decision') return t('da {chi}', { chi: n.actor ?? t('qualcuno') });
+    return n.payload.approver ? t('proposta da {chi} · approvata da {approvatore}', { chi: n.actor, approvatore: n.payload.approver }) : t('da {chi}', { chi: n.actor ?? t('qualcuno') });
   };
   /** Dove porta la notifica: l'approvazione, l'evento se esiste ancora, altrimenti niente. */
   const destinazione = (n: Notifica): string | undefined =>
@@ -46,18 +47,18 @@
 
 <div class="schermata con-menu inbox">
   <header>
-    <h1>Inbox</h1>
-    {#if app.inbox.unread}<button type="button" class="collegamento" disabled={!app.online} onclick={segna}>Segna tutto come letto</button>{/if}
+    <h1>{t('Inbox')}</h1>
+    {#if app.inbox.unread}<button type="button" class="collegamento" disabled={!app.online} onclick={segna}>{t('Segna tutto come letto')}</button>{/if}
   </header>
 
-  <nav aria-label="Sezioni inbox" class="schede">
-    <a href="#/inbox" aria-current="page">Notifiche {#if app.inbox.unread}<span class="mono quante">{app.inbox.unread} {app.inbox.unread === 1 ? 'nuova' : 'nuove'}</span>{/if}</a>
+  <nav aria-label={t('Sezioni inbox')} class="schede">
+    <a href="#/inbox" aria-current="page">{t('Notifiche')} {#if app.inbox.unread}<span class="mono quante">{app.inbox.unread === 1 ? t('1 nuova') : t('{n} nuove', { n: app.inbox.unread })}</span>{/if}</a>
     {#if proposte}
-      <a href="#/approvazioni">{decide ? 'Da approvare' : 'Le mie proposte'} {#if app.inbox.to_approve}<span class="pallino">{app.inbox.to_approve}</span>{/if}</a>
+      <a href="#/approvazioni">{decide ? t('Da approvare') : t('Le mie proposte')} {#if app.inbox.to_approve}<span class="pallino">{app.inbox.to_approve}</span>{/if}</a>
     {/if}
   </nav>
 
-  <div role="radiogroup" aria-label="Filtra per tipo di modifica" class="filtri">
+  <div role="radiogroup" aria-label={t('Filtra per tipo di modifica')} class="filtri">
     {#each FILTRI as [id, nome] (id)}
       <button type="button" role="radio" class="scelta" aria-checked={filtro === id} onclick={() => (filtro = id)}>{nome}</button>
     {/each}
@@ -73,7 +74,7 @@
           <a href={destinazione(n)} class="voce-inbox" class:eliminato={n.kind === 'deleted'}>
             <span class="dato testa">
               <span class={a.tono}>{a.testo}</span>
-              <span class="tenue">{ora(n.at)}{#if !n.read}<i><span class="nascosto">Non letta</span></i>{/if}</span>
+              <span class="tenue">{ora(n.at)}{#if !n.read}<i><span class="nascosto">{t('Non letta')}</span></i>{/if}</span>
             </span>
             <span class="nome">{n.payload.event.title}</span>
             <span class="riga"><i class="quadratino" style:background={colore(app.meta, n.payload.event.tag_id)}></i>{metaNotifica(app.meta, n.payload.event)}</span>
@@ -88,7 +89,7 @@
         {/each}
       </section>
     {:else}
-      <p class="vuoto">Nessuna notifica{filtro === 'tutto' ? '' : ' di questo tipo'}. Le modifiche agli eventi pubblici compaiono qui.</p>
+      <p class="vuoto">{filtro === 'tutto' ? t('Nessuna notifica. Le modifiche agli eventi pubblici compaiono qui.') : t('Nessuna notifica di questo tipo. Le modifiche agli eventi pubblici compaiono qui.')}</p>
     {/each}
   </div>
 </div>

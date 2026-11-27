@@ -1,13 +1,14 @@
 <script lang="ts">
-  let { chiave, onfatto, cta = "L'ho salvata, continua" }: { chiave: string; onfatto: () => void; cta?: string } = $props();
+  import { t } from '../i18n';
+  let { chiave, onfatto, cta = t('L\'ho salvata, continua') }: { chiave: string; onfatto: () => void; cta?: string } = $props();
 </script>
 
 <div class="schermata">
   <span class="marchio">TaskHit</span>
-  <span class="dato">Passo obbligatorio</span>
-  <h1>Conserva la chiave di recupero</h1>
-  <p class="lede">Se dimentichi la password, questa chiave è l'unico modo di riavere i tuoi dati privati. Il server non la conserva: scrivila o stampala e tienila al sicuro.</p>
-  <p class="chiave" aria-label="Chiave di recupero">{chiave}</p>
+  <span class="dato">{t('Passo obbligatorio')}</span>
+  <h1>{t('Conserva la chiave di recupero')}</h1>
+  <p class="lede">{t('Se dimentichi la password, questa chiave è l\'unico modo di riavere i tuoi dati privati. Il server non la conserva: scrivila o stampala e tienila al sicuro.')}</p>
+  <p class="chiave" aria-label={t('Chiave di recupero')}>{chiave}</p>
   <button type="button" class="pulsante accento grande" onclick={onfatto}>{cta}</button>
 </div>
 

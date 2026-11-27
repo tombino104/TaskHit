@@ -1,4 +1,5 @@
 // Il modello degli eventi dell'interfaccia e le funzioni pure che lo trasformano.
+import { t } from './i18n';
 import type { Campi, EventoServer, Fotografia, Gruppo, Meta, Modifiche, Ruolo, VoceStoria } from './api';
 import { chiave, chiaveDi, daSecondi, dataBreve, nomeGiorno, maiuscola, ora, piuGiorni } from './dates';
 
@@ -42,14 +43,14 @@ export const colore = (meta: Meta | null, tagId: string | null): string => mater
 
 /** "Verifica teorica", "Corso extrascolastico", "Interrogazione". */
 export function nomeTipo(meta: Meta | null, labelId: string | null, sub: string | null): string {
-  const t = tipoDi(meta, labelId);
-  if (!t) return 'Evento';
-  if (sub === 'recupero') return `${t.name} di recupero`;
-  return sub ? `${t.name} ${sub}` : t.name;
+  const tipo = tipoDi(meta, labelId);
+  if (!tipo) return t('Evento');
+  if (sub === 'recupero') return t('{tipo} di recupero', { tipo: t(tipo.name) });
+  return sub ? t('{tipo} {modo}', { tipo: t(tipo.name), modo: t(sub) }) : t(tipo.name);
 }
 
 /** "Scritta", "Pratica", "Di recupero". */
-export const nomeModo = (sub: string): string => (sub === 'recupero' ? 'Di recupero' : sub.charAt(0).toUpperCase() + sub.slice(1));
+export const nomeModo = (sub: string): string => (sub === 'recupero' ? t('Di recupero') : t(sub.charAt(0).toUpperCase() + sub.slice(1)));
 
 /** "Matematica · Verifica teorica" */
 export function riassunto(meta: Meta | null, e: Pick<Campi, 'tag_id' | 'label_id' | 'sub_kind'>): string {
@@ -57,24 +58,24 @@ export function riassunto(meta: Meta | null, e: Pick<Campi, 'tag_id' | 'label_id
 }
 
 export const gruppoDi = (meta: Meta | null, id: string | null): Gruppo | undefined => meta?.groups.find((g) => g.id === id);
-export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? 'Gruppo' : g.kind === 'classe' ? `Classe ${g.name}` : g.work ? g.name : `Gruppo ${g.name}`);
+export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? t('Gruppo') : g.kind === 'classe' ? t('Classe {nome}', { nome: g.name }) : g.work ? g.name : t('Gruppo {nome}', { nome: g.name }));
 
-export const NOMI_RUOLO: Record<Ruolo, string> = { admin: 'Admin', rappresentante: 'Rappresentante', nerd: 'Nerd', alunno: 'Alunno' };
+export const NOMI_RUOLO: Record<Ruolo, string> = { admin: t('Admin'), rappresentante: t('Rappresentante'), nerd: t('Nerd'), alunno: t('Alunno') };
 /** Inviti, richieste, gruppi e plugin: admin e rappresentanti. */
 export const puoGestire = (r: Ruolo): boolean => r === 'admin' || r === 'rappresentante';
 export const puoPubblicare = (r: Ruolo): 'diretto' | 'proposta' | 'no' =>
   r === 'rappresentante' ? 'diretto' : r === 'nerd' ? 'proposta' : 'no';
 
 export const AVVISI: { id: string; nome: string }[] = [
-  { id: 'g1', nome: '1 giorno prima' },
-  { id: 'g2', nome: '2 giorni prima' },
-  { id: 'sera', nome: 'La sera prima' },
-  { id: 'sett', nome: '1 settimana prima' },
+  { id: 'g1', nome: t('1 giorno prima') },
+  { id: 'g2', nome: t('2 giorni prima') },
+  { id: 'sera', nome: t('La sera prima') },
+  { id: 'sett', nome: t('1 settimana prima') },
 ];
 export function testoAvvisi(avvisi: string[]): string {
   const nomi = AVVISI.filter((a) => avvisi.includes(a.id)).map((a, i) => (i ? a.nome.charAt(0).toLowerCase() + a.nome.slice(1) : a.nome));
-  if (!nomi.length) return 'Nessuno';
-  return nomi.length === 1 ? nomi[0]! : `${nomi.slice(0, -1).join(', ')} e ${nomi.at(-1)}`;
+  if (!nomi.length) return t('Nessuno');
+  return nomi.length === 1 ? nomi[0]! : t('{elenco} e {ultimo}', { elenco: nomi.slice(0, -1).join(', '), ultimo: nomi.at(-1) });
 }
 
 export const iniziali = (nome: string): string => {
@@ -96,30 +97,31 @@ export function testoSu(sfondo: string): string {
   return scuro >= chiaro ? '#17171B' : '#FFFFFF';
 }
 
-const NUMERI = ['zero', 'un', 'due', 'tre', 'quattro', 'cinque', 'sei', 'sette', 'otto', 'nove', 'dieci'];
+const NUMERI = [t('zero'), t('un'), t('due'), t('tre'), t('quattro'), t('cinque'), t('sei'), t('sette'), t('otto'), t('nove'), t('dieci')];
 const inParole = (n: number) => NUMERI[n] ?? String(n);
 
 /** La frase d'apertura di «Oggi»: quanti impegni ci sono e il prossimo giorno impegnativo. */
 export function fraseOggi(eventi: Evento[], meta: Meta | null, adesso: Date): string {
   const giorni = perGiorno(eventi);
   const n = giorni.get(chiave(adesso))?.length ?? 0;
-  const prima = n === 0 ? 'Oggi non hai impegni.' : n === 1 ? 'Oggi hai un impegno.' : `Oggi hai ${inParole(n)} impegni.`;
+  const prima = n === 0 ? t('Oggi non hai impegni.') : n === 1 ? t('Oggi hai un impegno.') : t('Oggi hai {n} impegni.', { n: inParole(n) });
   const verifiche = (k: string) => (giorni.get(k) ?? []).filter((e) => tipoDi(meta, e.label_id)?.name.startsWith('Verifica')).length;
   const prossimi = Array.from({ length: 6 }, (_, i) => piuGiorni(adesso, i + 1));
-  const quando = (d: Date, i: number) => (i === 0 ? 'Domani' : maiuscola(nomeGiorno(d)));
+  const quando = (d: Date, i: number) => (i === 0 ? t('Domani') : maiuscola(nomeGiorno(d)));
   const pieno = prossimi.findIndex((d) => verifiche(chiave(d)) >= 2);
-  if (pieno >= 0) return `${prima} ${quando(prossimi[pieno]!, pieno)} ci sono ${inParole(verifiche(chiave(prossimi[pieno]!)))} verifiche.`;
+  if (pieno >= 0) return `${prima} ${t('{quando} ci sono {n} verifiche.', { quando: quando(prossimi[pieno]!, pieno), n: inParole(verifiche(chiave(prossimi[pieno]!))) })}`;
   const primaVerifica = prossimi.findIndex((d) => verifiche(chiave(d)) === 1);
-  if (primaVerifica >= 0) return `${prima} ${quando(prossimi[primaVerifica]!, primaVerifica)} c'è una verifica.`;
+  if (primaVerifica >= 0) return `${prima} ${t("{quando} c'è una verifica.", { quando: quando(prossimi[primaVerifica]!, primaVerifica) })}`;
   return prima;
 }
 
-export interface RigaModifica { campo: string; prima: string; dopo: string }
+/** `campo` è il nome da mostrare, `chiave` quello fisso su cui ragiona il codice. */
+export interface RigaModifica { chiave: string; campo: string; prima: string; dopo: string }
 
 /** Le differenze tra due versioni, in parole: usate da Inbox, approvazioni e cronologia. */
 export function righeModifiche(meta: Meta | null, modifiche: Modifiche): RigaModifica[] {
   const out: RigaModifica[] = [];
-  const aggiungi = (campo: string, prima: string, dopo: string) => { if (prima !== dopo) out.push({ campo, prima, dopo }); };
+  const aggiungi = (chiave: string, prima: string, dopo: string) => { if (prima !== dopo) out.push({ chiave, campo: t(chiave), prima, dopo }); };
   const m = modifiche as Record<string, [any, any] | undefined>;
   const persone = new Map(meta?.groups.flatMap((g) => g.members.map((p) => [p.id, p.name] as const)) ?? []);
   if (m.title) aggiungi('TITOLO', m.title[0], m.title[1]);
@@ -133,8 +135,8 @@ export function righeModifiche(meta: Meta | null, modifiche: Modifiche): RigaMod
     && m.ends_at[0] - m.starts_at[0] === m.ends_at[1] - m.starts_at[1];
   if (m.ends_at && !stessaDurata) aggiungi('FINE', m.ends_at[0] ? ora(m.ends_at[0]) : '—', m.ends_at[1] ? ora(m.ends_at[1]) : '—');
   if (m.tag_id) aggiungi('MATERIA', materiaDi(meta, m.tag_id[0])?.name ?? '—', materiaDi(meta, m.tag_id[1])?.name ?? '—');
-  if (m.label_id) aggiungi('TIPO', tipoDi(meta, m.label_id[0])?.name ?? '—', tipoDi(meta, m.label_id[1])?.name ?? '—');
-  if (m.sub_kind) aggiungi('MODALITÀ', m.sub_kind[0] ?? '—', m.sub_kind[1] ?? '—');
+  if (m.label_id) aggiungi('TIPO', t(tipoDi(meta, m.label_id[0])?.name ?? '—'), t(tipoDi(meta, m.label_id[1])?.name ?? '—'));
+  if (m.sub_kind) aggiungi('MODALITÀ', m.sub_kind[0] ? t(m.sub_kind[0]) : '—', m.sub_kind[1] ? t(m.sub_kind[1]) : '—');
   if (m.group_id) aggiungi('GRUPPO', gruppoDi(meta, m.group_id[0])?.name ?? '—', gruppoDi(meta, m.group_id[1])?.name ?? '—');
   if (m.subject_id) aggiungi('ALUNNO', persone.get(m.subject_id[0]) ?? '—', persone.get(m.subject_id[1]) ?? '—');
   if (m.description) aggiungi('TESTO', m.description[0] ?? '—', m.description[1] ?? '—');
@@ -150,24 +152,24 @@ export function differenze(prima: object, dopo: object): Modifiche {
   ) as Modifiche;
 }
 
-const FRASI: Record<string, string> = { TITOLO: 'il titolo', DATA: 'la data', ORA: "l'ora", FINE: "l'ora di fine", MATERIA: 'la materia', TIPO: 'il tipo', 'MODALITÀ': 'la modalità', GRUPPO: 'il gruppo', ALUNNO: "l'alunno" };
+const FRASI: Record<string, string> = { TITOLO: t('il titolo'), DATA: t('la data'), ORA: t("l'ora"), FINE: t("l'ora di fine"), MATERIA: t('la materia'), TIPO: t('il tipo'), 'MODALITÀ': t('la modalità'), GRUPPO: t('il gruppo'), ALUNNO: t("l'alunno") };
 
 /** "Luca Conti ha spostato l'ora da 10:00 a 08:00. Approvato da Giulia Ferri." */
 export function fraseStoria(meta: Meta | null, v: VoceStoria): string {
-  const chi = v.actor ?? 'Qualcuno';
+  const chi = v.actor ?? t('Qualcuno');
   let testo: string;
-  if (v.kind === 'added') testo = `${chi} ha creato l'evento.`;
-  else if (v.kind === 'deleted') testo = `${chi} ha eliminato l'evento.`;
+  if (v.kind === 'added') testo = t("{chi} ha creato l'evento.", { chi });
+  else if (v.kind === 'deleted') testo = t("{chi} ha eliminato l'evento.", { chi });
   else {
     const parti = righeModifiche(meta, v.changes ?? {}).map((r) => {
-      if (r.campo === 'TESTO') return 'ha aggiornato la descrizione';
-      if (r.campo === 'AVVISO') return 'ha cambiato gli avvisi';
-      const verbo = r.campo === 'DATA' || r.campo === 'ORA' ? 'ha spostato' : 'ha cambiato';
-      return `${verbo} ${FRASI[r.campo] ?? 'un campo'} da ${r.prima} a ${r.dopo}`;
+      if (r.chiave === 'TESTO') return t('ha aggiornato la descrizione');
+      if (r.chiave === 'AVVISO') return t('ha cambiato gli avvisi');
+      const frase = r.chiave === 'DATA' || r.chiave === 'ORA' ? 'ha spostato {cosa} da {prima} a {dopo}' : 'ha cambiato {cosa} da {prima} a {dopo}';
+      return t(frase, { cosa: FRASI[r.chiave] ?? t('un campo'), prima: r.prima, dopo: r.dopo });
     });
-    testo = `${chi} ${parti.length ? parti.join(', ') : "ha modificato l'evento"}.`;
+    testo = `${chi} ${parti.length ? parti.join(', ') : t("ha modificato l'evento")}.`;
   }
-  return v.approver ? `${testo} Approvato da ${v.approver}.` : testo;
+  return v.approver ? `${testo} ${t('Approvato da {nome}.', { nome: v.approver })}` : testo;
 }
 
 /** La notifica di un evento in una riga: "Matematica · Verifica teorica · Mar 24 nov, 08:00". */

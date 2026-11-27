@@ -22,7 +22,7 @@ Stato del documento: **fase 3 (calendario e interfaccia)**. Dice cosa è stato d
 Browser (PWA)  ──HTTPS──►  Cloudflare Tunnel  ──►  Umbrel app  ──►  taskhit-server (Rust)
  │  Argon2id, HKDF, AES-GCM                                          │  Axum + tower layers
  │  IndexedDB (cache offline)                                        │  SQLite/SQLCipher in /data
- └─ service worker                                                   └─ /data/{taskhit.db, secrets/, themes/, backups/}
+ └─ service worker                                                   └─ /data/{taskhit.db, secrets/, themes/, languages/, backups/}
 ```
 
 Il server serve sia le API (`/api/*`) sia i file della PWA. I percorsi senza estensione ricadono su `index.html`; un file mancante (`/assets/x.js`) risponde 404.
@@ -159,6 +159,10 @@ Un tema è **un solo file JSON** in `/data/themes/`. Il server ne carica l'elenc
 ```
 
 Ogni tema ha **sempre entrambe le versioni**: un file senza `chiaro` o senza `scuro` non è valido, e ciascuna versione deve superare i controlli di contrasto. Inclusi: Carta, Quaderno, Lavagna. In «Aspetto» si scelgono, separatamente, il tema e la modalità (chiaro, scuro, sistema). I file non validi non fanno fallire l'app: compaiono in `invalid` con il motivo. All'avvio i predefiniti rimasti nel formato precedente vengono sostituiti (se modificati a mano, restano come `.json.vecchio`).
+
+## Lingue
+
+L'italiano è la lingua di partenza ed è scritto nel codice: ogni testo passa da `t('…')` (`web/src/lib/i18n.ts`) e la frase italiana è la chiave. Un file di lingua è `{ "nome": …, "testi": { "italiano": "traduzione" } }`; i segnaposto `{nome}` si conservano. L'inglese è incluso nel server (`server/languages-default/`), così si aggiorna con l'app; i file in `/data/languages/` aggiungono lingue o ritoccano quelle incluse. L'interfaccia scarica la lingua prima di caricarsi e ne tiene una copia per l'offline; cambiarla ricarica l'app. Si traducono anche i messaggi d'errore del server e i tipi di evento predefiniti, non ciò che scrivono le persone. Un test (`i18n.test.ts`) fallisce se un testo non ha la traduzione inglese.
 
 ## 8. Plugin
 

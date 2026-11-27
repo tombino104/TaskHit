@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Icona from '../ui/Icona.svelte';
   import RigaEvento from '../ui/RigaEvento.svelte';
   import Sblocco from '../ui/Sblocco.svelte';
@@ -47,8 +48,8 @@
     const d = vista === 'mese' ? piuMesi(scelto, verso) : piuGiorni(scelto, verso * (vista === 'settimana' ? 7 : 1));
     stato.giorno = chiave(d);
   }
-  const VISTE = [['giorno', 'Giorno'], ['settimana', 'Settimana'], ['mese', 'Mese']] as const;
-  const unita = $derived(vista === 'mese' ? ['Mese precedente', 'Mese successivo'] : vista === 'settimana' ? ['Settimana precedente', 'Settimana successiva'] : ['Giorno precedente', 'Giorno successivo']);
+  const VISTE = [['giorno', t('Giorno')], ['settimana', t('Settimana')], ['mese', t('Mese')]] as const;
+  const unita = $derived(vista === 'mese' ? [t('Mese precedente'), t('Mese successivo')] : vista === 'settimana' ? [t('Settimana precedente'), t('Settimana successiva')] : [t('Giorno precedente'), t('Giorno successivo')]);
 </script>
 
 <div class="schermata con-menu calendario" class:ampia={vista === 'settimana'}>
@@ -56,7 +57,7 @@
   <header class:sett={vista === 'settimana'}>
     <div class="intestazione">
       {#if vista === 'settimana'}
-        <span class="dato occhio">Settimana {numeroSettimana(scelto)}{classe ? ` · Classe ${classe}` : ''}</span>
+        <span class="dato occhio">{t('Settimana {n}', { n: numeroSettimana(scelto) })}{classe ? ` · ${t('Classe {nome}', { nome: classe })}` : ''}</span>
         <h1 class="settimanale">{intervallo.numeri} <em>{intervallo.mese}</em></h1>
       {:else}
         <h1>{maiuscola(mese(scelto))}</h1>
@@ -65,21 +66,21 @@
     </div>
     <div class="frecce">
       <button type="button" class="tondo" aria-label={unita[0]} onclick={() => scorri(-1)}><Icona nome="sinistra" size={20} /></button>
-      <button type="button" class="adesso" onclick={() => (stato.giorno = oggi)}>Oggi</button>
+      <button type="button" class="adesso" onclick={() => (stato.giorno = oggi)}>{t('Oggi')}</button>
       <button type="button" class="tondo" aria-label={unita[1]} onclick={() => scorri(1)}><Icona nome="destra" size={20} /></button>
     </div>
   </header>
 
   <div class="barra">
-    <div role="group" aria-label="Vista" class="segmenti viste">
+    <div role="group" aria-label={t('Vista')} class="segmenti viste">
       {#each VISTE as [id, nome] (id)}
         <button type="button" aria-pressed={vista === id} onclick={() => (stato.vista = id)}>{nome}</button>
       {/each}
     </div>
     <button type="button" class="filtra" onclick={() => (stato.filtriAperti = true)}>
-      <Icona nome="filtro" size={18} />Filtra{#if filtriAttivi(app.filtri)}<span class="pallino">{filtriAttivi(app.filtri)}</span>{/if}
+      <Icona nome="filtro" size={18} />{t('Filtra')}{#if filtriAttivi(app.filtri)}<span class="pallino">{filtriAttivi(app.filtri)}</span>{/if}
     </button>
-    <a href="#/nuovo/{chiave(scelto)}" class="pulsante pieno nuovo"><Icona nome="piu" size={16} spessore={1.8} />Nuovo evento</a>
+    <a href="#/nuovo/{chiave(scelto)}" class="pulsante pieno nuovo"><Icona nome="piu" size={16} spessore={1.8} />{t('Nuovo evento')}</a>
   </div>
   </div>
 
@@ -94,7 +95,7 @@
           {@const fuori = d.getMonth() !== scelto.getMonth()}
           {@const l = giorni.get(k) ?? []}
           <button type="button" class:fuori class:presente={k === oggi} aria-pressed={k === chiave(scelto)}
-                  aria-label="{dataLunga(d)}{l.length ? `, ${l.length} ${l.length === 1 ? 'evento' : 'eventi'}` : ''}"
+                  aria-label="{dataLunga(d)}{l.length ? `, ${l.length === 1 ? t('1 evento') : t('{n} eventi', { n: l.length })}` : ''}"
                   onclick={() => (stato.giorno = k)}>
             <span class="numero">{d.getDate()}</span>
             <span class="barre">{#each l.slice(0, 3) as e (e.id)}<i style:background={colore(app.meta, e.tag_id)}></i>{/each}</span>
@@ -108,12 +109,12 @@
     <section aria-live="polite" class="giornata">
       <div class="titolo-giorno">
         <h2>{dataLunga(scelto)}</h2>
-        <span class="dato">{delGiorno.length} {delGiorno.length === 1 ? 'evento' : 'eventi'}</span>
+        <span class="dato">{delGiorno.length === 1 ? t('1 evento') : t('{n} eventi', { n: delGiorno.length })}</span>
       </div>
       {#each delGiorno as e (e.id)}
         <RigaEvento evento={e} compatta={vista === 'mese'} />
       {:else}
-        <p class="vuoto">Giornata libera. Nessun evento.</p>
+        <p class="vuoto">{t('Giornata libera. Nessun evento.')}</p>
       {/each}
     </section>
   {:else if largo.attivo}
@@ -127,12 +128,12 @@
             <div class="schede-evento">
               {#each l as e (e.id)}
                 <a href="#/evento/{e.id}" class="tinta-materia" style:--materia={materiaDi(app.meta, e.tag_id)?.color}>
-                  <span class="mono riga"><span>{ora(e.starts_at)}</span><span>{e.privato ? 'PRIVATO' : 'PUBBLICO'}</span></span>
+                  <span class="mono riga"><span>{ora(e.starts_at)}</span><span>{e.privato ? t('PRIVATO') : t('PUBBLICO')}</span></span>
                   <span class="dato">{riassunto(app.meta, e)}</span>
                   <span class="nome">{e.title}</span>
                 </a>
               {:else}
-                <span class="libero">Libero</span>
+                <span class="libero">{t('Libero')}</span>
               {/each}
             </div>
           </section>
@@ -141,10 +142,10 @@
     </div>
 
     {#if graficoAttivo}
-      <section class="carico" aria-label="Plugin: carico della settimana">
+      <section class="carico" aria-label={t('Plugin: carico della settimana')}>
         <div class="legenda">
-          <span class="dato">Plugin · Carico della settimana</span>
-          <span class="chiavi"><span><i class="quadratino grande pub"></i>Pubblici</span><span><i class="quadratino grande priv"></i>Privati</span></span>
+          <span class="dato">{t('Plugin · Carico della settimana')}</span>
+          <span class="chiavi"><span><i class="quadratino grande pub"></i>{t('Pubblici')}</span><span><i class="quadratino grande priv"></i>{t('Privati')}</span></span>
         </div>
         <Grafico {colonne} periodo="questa settimana" altezza={84} assi={false} />
       </section>
@@ -154,7 +155,7 @@
       {@const l = giorni.get(chiave(d)) ?? []}
       <section class="giornata">
         <h2 class="dato occhiello"><span>{dataLunga(d)}</span><span>{l.length}</span></h2>
-        {#each l as e (e.id)}<RigaEvento evento={e} compatta />{:else}<p class="vuoto stretto">Libero</p>{/each}
+        {#each l as e (e.id)}<RigaEvento evento={e} compatta />{:else}<p class="vuoto stretto">{t('Libero')}</p>{/each}
       </section>
     {/each}
   {/if}

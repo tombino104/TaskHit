@@ -1,37 +1,44 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Icona from '../ui/Icona.svelte';
   import Interruttore from '../ui/Interruttore.svelte';
+  import Lingue from '../ui/Lingue.svelte';
   import { app, caricaTemi, scegliPreferenze } from '../store.svelte';
   import { pickTheme, tipoDi, type Modo } from '../theme';
   import { onMount } from 'svelte';
 
   onMount(() => void caricaTemi()); // un file aggiunto nella cartella compare subito
 
-  const MODI: [Modo, string][] = [['chiaro', 'Chiaro'], ['scuro', 'Scuro'], ['sistema', 'Sistema']];
+  const MODI: [Modo, string][] = [['chiaro', t('Chiaro')], ['scuro', t('Scuro')], ['sistema', t('Sistema')]];
   const scelto = $derived(pickTheme(app.temi, app.preferenze));
   const buio = matchMedia('(prefers-color-scheme: dark)');
   const nota = $derived.by(() => {
-    if (app.preferenze.modo === 'sistema') return `Segue il dispositivo: ${scelto?.nome ?? 'il tema'} chiaro di giorno, scuro quando il dispositivo passa al buio.`;
-    return `Sempre ${tipoDi(app.preferenze, buio.matches)}, qualunque sia l’impostazione del dispositivo.`;
+    if (app.preferenze.modo === 'sistema') return t('Segue il dispositivo: {tema} chiaro di giorno, scuro quando il dispositivo passa al buio.', { tema: scelto?.nome ?? t('il tema') });
+    return t('Sempre {versione}, qualunque sia l’impostazione del dispositivo.', { versione: t(tipoDi(app.preferenze, buio.matches)) });
   });
   const VERSIONI = ['chiaro', 'scuro'] as const;
 
   const NOTIFICHE = [
-    ['Nuovi eventi pubblici', 'Quando qualcuno aggiunge un evento per la classe'],
-    ['Modifiche ed eliminazioni', 'Date, orari o eventi annullati'],
-    ['Promemoria', 'Gli avvisi che imposti su ogni evento'],
-    ['Proposte da approvare', 'Solo per i rappresentanti'],
-    ['Non disturbare', 'Silenzia tutto dalle 22:00 alle 07:00'],
+    [t('Nuovi eventi pubblici'), t('Quando qualcuno aggiunge un evento per la classe')],
+    [t('Modifiche ed eliminazioni'), t('Date, orari o eventi annullati')],
+    [t('Promemoria'), t('Gli avvisi che imposti su ogni evento')],
+    [t('Proposte da approvare'), t('Solo per i rappresentanti')],
+    [t('Non disturbare'), t('Silenzia tutto dalle 22:00 alle 07:00')],
   ] as const;
 </script>
 
 <div class="schermata aspetto">
-  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
-  <h1 class="titolo sottolineato">Aspetto{#if app.utente?.role !== 'admin'}{' '}<em>&amp;</em> notifiche{/if}</h1>
+  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />{t('Profilo')}</a>
+  <h1 class="titolo sottolineato">{t('Aspetto')}{#if app.utente?.role !== 'admin'}{' '}<em>&amp;</em> {t('notifiche')}{/if}</h1>
 
   <section>
-    <h2 class="dato">Modalità</h2>
-    <div role="radiogroup" aria-label="Modalità colore" class="segmenti">
+    <h2 class="dato">{t('Lingua')}</h2>
+    <Lingue />
+  </section>
+
+  <section>
+    <h2 class="dato">{t('Modalità')}</h2>
+    <div role="radiogroup" aria-label={t('Modalità colore')} class="segmenti">
       {#each MODI as [id, nome] (id)}
         <button type="button" role="radio" aria-checked={app.preferenze.modo === id} onclick={() => scegliPreferenze({ modo: id })}>{nome}</button>
       {/each}
@@ -40,33 +47,33 @@
   </section>
 
   <section>
-    <h2 class="dato">Temi installati</h2>
-    <div role="radiogroup" aria-label="Tema" class="temi">
-      {#each app.temi as t (t.id)}
-        <button type="button" role="radio" aria-checked={scelto?.id === t.id} onclick={() => scegliPreferenze({ tema: t.id })}>
+    <h2 class="dato">{t('Temi installati')}</h2>
+    <div role="radiogroup" aria-label={t('Tema')} class="temi">
+      {#each app.temi as tema (tema.id)}
+        <button type="button" role="radio" aria-checked={scelto?.id === tema.id} onclick={() => scegliPreferenze({ tema: tema.id })}>
           <span class="anteprima" aria-hidden="true">
             {#each VERSIONI as v (v)}
-              <span class="meta" style:background={t[v].sfondo}>
-                <span style:color={t[v].inchiostro} style:font-family={t.font?.titoli ? `'${t.font.titoli}', serif` : undefined}>Aa</span>
-                <span class="segni"><i style:background={t[v].inchiostro}></i><i style:background={t[v].accento}></i></span>
+              <span class="meta" style:background={tema[v].sfondo}>
+                <span style:color={tema[v].inchiostro} style:font-family={tema.font?.titoli ? `'${tema.font.titoli}', serif` : undefined}>Aa</span>
+                <span class="segni"><i style:background={tema[v].inchiostro}></i><i style:background={tema[v].accento}></i></span>
               </span>
             {/each}
           </span>
-          <span class="nome"><span class="serif">{t.nome}</span></span>
+          <span class="nome"><span class="serif">{tema.nome}</span></span>
         </button>
       {/each}
     </div>
-    <button type="button" class="pulsante tratteggiato" disabled><Icona nome="carica" size={18} />Carica un tema (.json)</button>
-    <p class="nota">Un tema è un solo file con font e colori, chiari e scuri. Il caricamento da qui è in arrivo: per ora l'admin copia il file nella cartella dei temi del server, e chiunque può sceglierlo.</p>
+    <button type="button" class="pulsante tratteggiato" disabled><Icona nome="carica" size={18} />{t('Carica un tema (.json)')}</button>
+    <p class="nota">{t('Un tema è un solo file con font e colori, chiari e scuri. Il caricamento da qui è in arrivo: per ora l\'admin copia il file nella cartella dei temi del server, e chiunque può sceglierlo.')}</p>
   </section>
 
   {#if app.utente?.role !== 'admin'}
   <section class="notifiche">
-    <h2 class="dato">Notifiche push · in arrivo</h2>
+    <h2 class="dato">{t('Notifiche push · in arrivo')}</h2>
     {#each NOTIFICHE as [nome, descrizione] (nome)}
       <Interruttore {nome} {descrizione} attivo={false} disabilitato />
     {/each}
-    <button type="button" class="pulsante prova" disabled>Invia una notifica di prova</button>
+    <button type="button" class="pulsante prova" disabled>{t('Invia una notifica di prova')}</button>
   </section>
   {/if}
 </div>

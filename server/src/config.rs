@@ -147,6 +147,7 @@ impl Config {
     pub fn db_path(&self) -> PathBuf { self.paths.data_dir.join("taskhit.db") }
     pub fn secrets_dir(&self) -> PathBuf { self.paths.data_dir.join("secrets") }
     pub fn themes_dir(&self) -> PathBuf { self.paths.data_dir.join("themes") }
+    pub fn languages_dir(&self) -> PathBuf { self.paths.data_dir.join("languages") }
     pub fn backups_dir(&self) -> PathBuf { self.paths.data_dir.join("backups") }
 
     /// Nome del cookie di sessione. Con HTTPS usa il prefisso __Host-, che il browser accetta

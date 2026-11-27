@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import { untrack } from 'svelte';
   import Foglio from '../ui/Foglio.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -69,9 +70,9 @@
     if (privato && alunno && untrack(() => app.meta?.labels.find((t) => t.id === tipo))?.personal === false) untrack(() => scegliTipo(predefinito?.id ?? ''));
   });
   const testi = $derived(
-    privato ? { nota: alunno ? 'Come alunno puoi aggiungere interrogazioni ed eventi personali. Restano privati.' : 'Evento privato: lo vedi solo tu, anche offline.', cta: 'Salva evento' }
-    : proposta ? { nota: `${esistente ? 'La modifica sarà applicata' : 'L’evento sarà pubblicato'} quando ${destinazione?.work ? 'il capogruppo' : 'un rappresentante'} approva.`, cta: 'Invia per approvazione' }
-    : { nota: 'L’evento sarà visibile subito al gruppo e comparirà nell’Inbox di tutti.', cta: esistente ? 'Salva modifiche' : 'Pubblica evento' },
+    privato ? { nota: alunno ? t('Come alunno puoi aggiungere interrogazioni ed eventi personali. Restano privati.') : t('Evento privato: lo vedi solo tu, anche offline.'), cta: t('Salva evento') }
+    : proposta ? { nota: t(esistente ? 'La modifica sarà applicata quando {chi} approva.' : 'L’evento sarà pubblicato quando {chi} approva.', { chi: destinazione?.work ? t('il capogruppo') : t('un rappresentante') }), cta: t('Invia per approvazione') }
+    : { nota: t('L’evento sarà visibile subito al gruppo e comparirà nell’Inbox di tutti.'), cta: esistente ? t('Salva modifiche') : t('Pubblica evento') },
   );
   const vietato = modo === 'modifica' && (!esistente || (!esistente.privato && untrack(() => dirittoSu(app.utente!, app.meta?.groups.find((g) => g.id === esistente.group_id))) === 'no'));
 
@@ -82,13 +83,13 @@
 
   async function salva(ev: SubmitEvent) {
     ev.preventDefault(); errore = '';
-    if (!titolo.trim()) { errore = 'Scrivi un titolo.'; return; }
-    if (!giorno || !dalle) { errore = 'Scegli data e ora.'; return; }
+    if (!titolo.trim()) { errore = t('Scrivi un titolo.'); return; }
+    if (!giorno || !dalle) { errore = t('Scegli data e ora.'); return; }
     const inizio = aSecondi(giorno, dalle);
     const fine = alle ? aSecondi(giorno, alle) : null;
-    if (fine !== null && fine <= inizio) { errore = "L'ora di fine deve seguire quella di inizio."; return; }
+    if (fine !== null && fine <= inizio) { errore = t('L\'ora di fine deve seguire quella di inizio.'); return; }
     if (privato && !app.sbloccato) { sblocco = true; return; }
-    if (!privato && per === 'alunno' && !membri.some((m) => m.id === soggetto)) { errore = 'Scegli a quale alunno si riferisce.'; return; }
+    if (!privato && per === 'alunno' && !membri.some((m) => m.id === soggetto)) { errore = t('Scegli a quale alunno si riferisce.'); return; }
     occupato = true;
     try {
       const esito = await salvaEvento(
@@ -96,7 +97,7 @@
         { title: titolo.trim(), description: descrizione.trim() || null, tag_id: materia, label_id: tipo, sub_kind: sotto, starts_at: inizio, ends_at: fine, alerts: $state.snapshot(avvisi) },
         privato ? { privato: true } : { privato: false, group_id: gruppo, subject_id: per === 'alunno' ? soggetto : null, nota: proposta ? nota.trim() || undefined : undefined },
       );
-      avvisa(esito === 'proposed' ? 'Proposta inviata.' : esito === 'published' ? 'Evento pubblicato.' : 'Evento salvato.');
+      avvisa(esito === 'proposed' ? t('Proposta inviata.') : esito === 'published' ? t('Evento pubblicato.') : t('Evento salvato.'));
       if (modo === 'modifica') indietro('oggi'); else sostituisci(`calendario/${giorno}`);
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
   }
@@ -131,31 +132,31 @@
 
 <div class="pagina">
   <header>
-    <span class="dato">{modo === 'modifica' ? 'Modifica evento' : 'Nuovo evento'}</span>
-    <button type="button" class="tondo" aria-label="Chiudi" onclick={() => indietro()}><Icona nome="chiudi" /></button>
+    <span class="dato">{modo === 'modifica' ? t('Modifica evento') : t('Nuovo evento')}</span>
+    <button type="button" class="tondo" aria-label={t('Chiudi')} onclick={() => indietro()}><Icona nome="chiudi" /></button>
   </header>
 
   {#if vietato}
-    <div class="schermata"><p class="lede">Questo evento non è disponibile per la modifica.</p><Sblocco /></div>
+    <div class="schermata"><p class="lede">{t('Questo evento non è disponibile per la modifica.')}</p><Sblocco /></div>
   {:else}
     <form onsubmit={salva} novalidate>
       <label class="campo">
-        <span class="dato">Titolo</span>
-        <input class="titolo-evento" bind:value={titolo} maxlength="120" placeholder="Di cosa si tratta?" />
+        <span class="dato">{t('Titolo')}</span>
+        <input class="titolo-evento" bind:value={titolo} maxlength="120" placeholder={t('Di cosa si tratta?')} />
       </label>
 
       <fieldset>
-        <legend class="dato">Tipo · etichetta</legend>
-        <div role="radiogroup" aria-label="Tipo" class="scelte">
-          {#each app.meta?.labels.filter((x) => !x.hidden) ?? [] as t (t.id)}
-            <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === t.id} disabled={privato && alunno && !t.personal} onclick={() => scegliTipo(t.id)}>{t.name}</button>
+        <legend class="dato">{t('Tipo · etichetta')}</legend>
+        <div role="radiogroup" aria-label={t('Tipo')} class="scelte">
+          {#each app.meta?.labels.filter((x) => !x.hidden) ?? [] as x (x.id)}
+            <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === x.id} disabled={privato && alunno && !x.personal} onclick={() => scegliTipo(x.id)}>{t(x.name)}</button>
           {/each}
           {#if rappresentante}
-            <button type="button" class="scelta nuova" onclick={() => (nuovoTipo = true)}>+ Nuovo tipo</button>
+            <button type="button" class="scelta nuova" onclick={() => (nuovoTipo = true)}>{t('+ Nuovo tipo')}</button>
           {/if}
         </div>
         {#if scelto?.subs.length}
-          <div role="radiogroup" aria-label="Modalità" class="modi">
+          <div role="radiogroup" aria-label={t('Modalità')} class="modi">
             {#each scelto.subs as s (s)}
               <button type="button" role="radio" aria-checked={sotto === s} onclick={() => (sotto = s)}><span aria-hidden="true"><i></i></span>{nomeModo(s)}</button>
             {/each}
@@ -164,37 +165,37 @@
       </fieldset>
 
       <fieldset>
-        <legend class="dato">Materia · tag</legend>
-        <div role="radiogroup" aria-label="Materia" class="scelte">
+        <legend class="dato">{t('Materia · tag')}</legend>
+        <div role="radiogroup" aria-label={t('Materia')} class="scelte">
           {#each app.meta?.tags ?? [] as m (m.id)}
             <button type="button" role="radio" class="scelta materia" aria-checked={materia === m.id} onclick={() => (materia = materia === m.id ? null : m.id)}>
               <i class="quadratino grande" style:background={m.color}></i>{m.name}
             </button>
           {/each}
           {#if rappresentante}
-            <button type="button" class="scelta nuova" onclick={() => (nuovaMateria = true)}>+ Nuovo tag</button>
+            <button type="button" class="scelta nuova" onclick={() => (nuovaMateria = true)}>{t('+ Nuovo tag')}</button>
           {/if}
         </div>
       </fieldset>
 
       <div class="quando">
-        <CampoData etichetta="Data" tipo="date" bind:valore={giorno} testo={giorno ? dataBreve(daChiave(giorno)) : 'Scegli'} />
-        <CampoData etichetta="Dalle" tipo="time" bind:valore={dalle} testo={dalle || '—'} mono />
-        <CampoData etichetta="Alle" tipo="time" bind:valore={alle} testo={alle || '—'} mono />
+        <CampoData etichetta={t('Data')} tipo="date" bind:valore={giorno} testo={giorno ? dataBreve(daChiave(giorno)) : t('Scegli')} />
+        <CampoData etichetta={t('Dalle')} tipo="time" bind:valore={dalle} testo={dalle || '—'} mono />
+        <CampoData etichetta={t('Alle')} tipo="time" bind:valore={alle} testo={alle || '—'} mono />
       </div>
 
       <fieldset>
-        <legend class="dato">Per chi</legend>
+        <legend class="dato">{t('Per chi')}</legend>
         {#if privato}
-          <p class="solo-tu">{app.utente?.display_name} (tu)</p>
+          <p class="solo-tu">{app.utente?.display_name}{t(' (tu)')}</p>
         {:else}
           <div class="per">
-            <div role="radiogroup" aria-label="Destinatario" class="segmenti">
-              <button type="button" role="radio" aria-checked={per === 'classe'} onclick={() => (per = 'classe')}>Classe</button>
-              <button type="button" role="radio" aria-checked={per === 'alunno'} onclick={() => (per = 'alunno')}>Alunno</button>
+            <div role="radiogroup" aria-label={t('Destinatario')} class="segmenti">
+              <button type="button" role="radio" aria-checked={per === 'classe'} onclick={() => (per = 'classe')}>{t('Classe')}</button>
+              <button type="button" role="radio" aria-checked={per === 'alunno'} onclick={() => (per = 'alunno')}>{t('Alunno')}</button>
             </div>
             <label class="campo">
-              <span class="nascosto">Classe o gruppo</span>
+              <span class="nascosto">{t('Classe o gruppo')}</span>
               <select bind:value={gruppo} onchange={() => (soggetto = '')}>
                 {#each gruppiMiei as g (g.id)}<option value={g.id}>{etichettaGruppo(g)}</option>{/each}
               </select>
@@ -202,10 +203,10 @@
           </div>
           {#if per === 'alunno'}
             <label class="campo alunno">
-              <span class="nascosto">Alunno</span>
+              <span class="nascosto">{t('Alunno')}</span>
               <select bind:value={soggetto}>
-                <option value="" disabled>Scegli l'alunno</option>
-                {#each membri as m (m.id)}<option value={m.id}>{m.name}{m.id === app.utente?.id ? ' (tu)' : ''}</option>{/each}
+                <option value="" disabled>{t('Scegli l\'alunno')}</option>
+                {#each membri as m (m.id)}<option value={m.id}>{m.name}{m.id === app.utente?.id ? t(' (tu)') : ''}</option>{/each}
               </select>
             </label>
           {/if}
@@ -213,26 +214,26 @@
       </fieldset>
 
       <fieldset>
-        <legend class="dato">Visibilità</legend>
-        <div role="radiogroup" aria-label="Visibilità" class="visibilita">
+        <legend class="dato">{t('Visibilità')}</legend>
+        <div role="radiogroup" aria-label={t('Visibilità')} class="visibilita">
           {#each [false, true] as p (p)}
-            {@const motivo = esistente && esistente.privato !== p ? 'La visibilità non si cambia dopo la creazione.'
-              : !p && !gruppiMiei.length ? (alunno ? 'Disponibile solo in un gruppo di lavoro.' : 'Serve far parte di un gruppo.') : ''}
+            {@const motivo = esistente && esistente.privato !== p ? t('La visibilità non si cambia dopo la creazione.')
+              : !p && !gruppiMiei.length ? (alunno ? t('Disponibile solo in un gruppo di lavoro.') : t('Serve far parte di un gruppo.')) : ''}
             <button type="button" role="radio" aria-checked={privato === p} disabled={!!motivo} onclick={() => (privato = p)}>
               <Icona nome={p ? 'lucchetto' : 'globo'} size={20} />
-              <span class="nome">{p ? 'Privato' : 'Pubblico'}</span>
-              <span class="spiega">{motivo || (p ? 'Lo vedi solo tu. Nessuna notifica agli altri.' : 'Lo vede tutto il gruppo e finisce nell’Inbox di tutti.')}</span>
+              <span class="nome">{p ? t('Privato') : t('Pubblico')}</span>
+              <span class="spiega">{motivo || (p ? t('Lo vedi solo tu. Nessuna notifica agli altri.') : t('Lo vede tutto il gruppo e finisce nell’Inbox di tutti.'))}</span>
               {#if privato === p}<span class="segno" aria-hidden="true"><Icona nome="spunta" size={12} spessore={2.4} /></span>{/if}
             </button>
           {/each}
         </div>
         {#if privato && !app.sbloccato}
-          <button type="button" class="collegamento" onclick={() => (sblocco = true)}>Sblocca con la password per salvare eventi privati</button>
+          <button type="button" class="collegamento" onclick={() => (sblocco = true)}>{t('Sblocca con la password per salvare eventi privati')}</button>
         {/if}
       </fieldset>
 
       <fieldset>
-        <legend class="dato">Avviso <span class="facoltativo">· facoltativo</span></legend>
+        <legend class="dato">{t('Avviso')} <span class="facoltativo">{t('· facoltativo')}</span></legend>
         <div class="scelte">
           {#each AVVISI as a (a.id)}
             <button type="button" class="scelta" aria-pressed={avvisi.includes(a.id)} onclick={() => (avvisi = commuta(avvisi, a.id))}>{a.nome}</button>
@@ -241,19 +242,19 @@
       </fieldset>
 
       <label class="descrizione">
-        <span class="dato">Descrizione <span class="facoltativo">· facoltativa</span></span>
-        <textarea rows="3" bind:value={descrizione} maxlength="4000" placeholder="Argomenti, pagine, cosa portare…"></textarea>
+        <span class="dato">{t('Descrizione')} <span class="facoltativo">{t('· facoltativa')}</span></span>
+        <textarea rows="3" bind:value={descrizione} maxlength="4000" placeholder={t('Argomenti, pagine, cosa portare…')}></textarea>
       </label>
 
       {#if proposta}
-        <label class="campo"><span class="dato">Nota per chi approva <span class="facoltativo">· facoltativa</span></span><input bind:value={nota} maxlength="300" placeholder="Perché questa modifica?" /></label>
+        <label class="campo"><span class="dato">{t('Nota per chi approva')} <span class="facoltativo">{t('· facoltativa')}</span></span><input bind:value={nota} maxlength="300" placeholder={t('Perché questa modifica?')} /></label>
       {/if}
 
       <footer>
         <div>
           {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
-          <p class="spiegazione"><Icona nome="info" size={16} /><span>{app.online ? testi.nota : 'Sei offline: per salvare serve la connessione.'}</span></p>
-          <button class="pulsante pieno grande" disabled={occupato || !app.online} aria-busy={occupato}>{occupato ? 'Salvo…' : testi.cta}</button>
+          <p class="spiegazione"><Icona nome="info" size={16} /><span>{app.online ? testi.nota : t('Sei offline: per salvare serve la connessione.')}</span></p>
+          <button class="pulsante pieno grande" disabled={occupato || !app.online} aria-busy={occupato}>{occupato ? t('Salvo…') : testi.cta}</button>
         </div>
       </footer>
     </form>
@@ -263,22 +264,22 @@
 <Sblocco bind:aperto={sblocco} riga={false} />
 
 {#if nuovoTipo}
-  <Foglio titolo="Nuovo tipo" onclose={() => (nuovoTipo = false)}>
+  <Foglio titolo={t('Nuovo tipo')} onclose={() => (nuovoTipo = false)}>
     <form class="breve" onsubmit={creaTipo}>
-      <label class="campo"><span class="dato">Nome</span><input bind:value={nomeTipo} required maxlength="40" /></label>
+      <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nomeTipo} required maxlength="40" /></label>
       {#if erroreTipo}<p class="errore" role="alert">{erroreTipo}</p>{/if}
-      <button class="pulsante pieno grande">Aggiungi tipo</button>
+      <button class="pulsante pieno grande">{t('Aggiungi tipo')}</button>
     </form>
   </Foglio>
 {/if}
 
 {#if nuovaMateria}
-  <Foglio titolo="Nuova materia" onclose={() => (nuovaMateria = false)}>
+  <Foglio titolo={t('Nuova materia')} onclose={() => (nuovaMateria = false)}>
     <form class="breve" onsubmit={creaMateria}>
-      <label class="campo"><span class="dato">Nome</span><input bind:value={nomeMateria} required maxlength="40" /></label>
-      <label class="colore"><span class="dato">Colore</span><input type="color" bind:value={coloreMateria} /></label>
+      <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nomeMateria} required maxlength="40" /></label>
+      <label class="colore"><span class="dato">{t('Colore')}</span><input type="color" bind:value={coloreMateria} /></label>
       {#if erroreMateria}<p class="errore" role="alert">{erroreMateria}</p>{/if}
-      <button class="pulsante pieno grande">Aggiungi materia</button>
+      <button class="pulsante pieno grande">{t('Aggiungi materia')}</button>
     </form>
   </Foglio>
 {/if}

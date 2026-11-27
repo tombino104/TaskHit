@@ -1,5 +1,6 @@
 // La foto profilo si prepara sul dispositivo: ritaglio quadrato, 320 px, JPEG. Ridisegnarla
 // elimina anche i dati nascosti nel file originale (posizione, fotocamera).
+import { t } from './i18n';
 import { b64 } from './crypto';
 
 const LATO = 320;
@@ -9,7 +10,7 @@ export const urlFoto = (id: string, versione: number): string => `/api/users/${e
 
 export async function riduciFoto(file: Blob): Promise<string> {
   let immagine: ImageBitmap;
-  try { immagine = await createImageBitmap(file); } catch { throw new Error('Questo file non è un’immagine leggibile.'); }
+  try { immagine = await createImageBitmap(file); } catch { throw new Error(t('Questo file non è un’immagine leggibile.')); }
   const taglio = Math.min(immagine.width, immagine.height);
   const tela = document.createElement('canvas');
   tela.width = tela.height = Math.min(LATO, taglio);
@@ -22,5 +23,5 @@ export async function riduciFoto(file: Blob): Promise<string> {
     const esito = await new Promise<Blob | null>((fatto) => tela.toBlob(fatto, 'image/jpeg', qualita));
     if (esito && esito.size <= MASSIMO) return b64.enc(new Uint8Array(await esito.arrayBuffer()));
   }
-  throw new Error('Non riesco a ridurre abbastanza questa foto.');
+  throw new Error(t('Non riesco a ridurre abbastanza questa foto.'));
 }

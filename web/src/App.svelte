@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './lib/i18n';
   import { onMount } from 'svelte';
   import { api, type Kdf } from './lib/api';
   import { app, caricaTemi, messaggio, riapplicaTema, riprendi, sincronizza } from './lib/store.svelte';
@@ -89,7 +90,7 @@
 {#if !cifraturaDisponibile}
   <main><ServeHttps /></main>
 {:else if fase === 'caricamento'}
-  <main class="schermata"><span class="marchio">TaskHit</span><p class="dato" role="status">Caricamento…</p></main>
+  <main class="schermata"><span class="marchio">TaskHit</span><p class="dato" role="status">{t('Caricamento…')}</p></main>
 {:else if fase === 'setup'}
   <main><Setup {kdf} onfine={() => { sostituisci('oggi'); fase = 'pronta'; }} /></main>
 {:else if !app.utente}

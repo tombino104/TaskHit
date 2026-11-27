@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import { onMount } from 'svelte';
   import Avatar from '../ui/Avatar.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -58,33 +59,33 @@
   // Chi decide conta quelle che aspettano lui, non le proprie in attesa di altri.
   const restanti = $derived(proposte.filter((p) => (!decide || p.can_decide) && scelte[p.id] === undefined).length);
   const AZIONI: Record<TipoProposta, { testo: string; tono: string }> = {
-    update: { testo: 'Propone una modifica', tono: 'pieno' },
-    create: { testo: 'Propone un nuovo evento', tono: 'accento' },
-    delete: { testo: 'Propone di eliminare', tono: 'tenue' },
+    update: { testo: t('Propone una modifica'), tono: 'pieno' },
+    create: { testo: t('Propone un nuovo evento'), tono: 'accento' },
+    delete: { testo: t('Propone di eliminare'), tono: 'tenue' },
   };
   function righe(p: Proposta): { campo: string; prima: string; dopo: string }[] {
     if (p.kind === 'delete') return [];
     if (p.kind === 'update') return p.current ? righeModifiche(app.meta, differenze(p.current, p.data)) : [];
     const d = p.data;
     return [
-      { campo: 'DATA', prima: '', dopo: dataBreve(daSecondi(d.starts_at)) },
-      { campo: 'ORA', prima: '', dopo: orario(d.starts_at, d.ends_at) },
-      { campo: 'VISIB.', prima: '', dopo: 'Pubblico' },
-      ...(d.alerts.length ? [{ campo: 'AVVISO', prima: '', dopo: testoAvvisi(d.alerts) }] : []),
-      ...(d.description ? [{ campo: 'TESTO', prima: '', dopo: d.description }] : []),
+      { campo: t('DATA'), prima: '', dopo: dataBreve(daSecondi(d.starts_at)) },
+      { campo: t('ORA'), prima: '', dopo: orario(d.starts_at, d.ends_at) },
+      { campo: t('VISIB.'), prima: '', dopo: t('Pubblico') },
+      ...(d.alerts.length ? [{ campo: t('AVVISO'), prima: '', dopo: testoAvvisi(d.alerts) }] : []),
+      ...(d.description ? [{ campo: t('TESTO'), prima: '', dopo: d.description }] : []),
     ];
   }
 </script>
 
 <div class="schermata approvazioni">
-  <a href="#/inbox" class="torna"><Icona nome="sinistra" size={20} />Inbox</a>
+  <a href="#/inbox" class="torna"><Icona nome="sinistra" size={20} />{t('Inbox')}</a>
 
   <header>
     <div>
-      <h1>{decide ? 'Da approvare' : 'Le mie proposte'}</h1>
-      {#if caricate}<span class="mono">{restanti ? `${restanti} IN ATTESA` : 'TUTTO FATTO'}</span>{/if}
+      <h1>{decide ? t('Da approvare') : t('Le mie proposte')}</h1>
+      {#if caricate}<span class="mono">{restanti ? t('{n} IN ATTESA', { n: restanti }) : t('TUTTO FATTO')}</span>{/if}
     </div>
-    <p class="lede">{decide ? 'Proposte in attesa. Nella classe decidono i rappresentanti, nei gruppi di lavoro il capogruppo; chi propone riceve l’esito nell’Inbox.' : 'Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.'}</p>
+    <p class="lede">{decide ? t('Proposte in attesa. Nella classe decidono i rappresentanti, nei gruppi di lavoro il capogruppo; chi propone riceve l’esito nell’Inbox.') : t('Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.')}</p>
   </header>
 
   {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
@@ -107,11 +108,11 @@
       <span class="riga-meta"><i class="quadratino" style:background={colore(app.meta, p.data.tag_id)}></i>{riassunto(app.meta, p.data)} · {p.kind === 'delete' ? `${dataBreve(daSecondi(p.data.starts_at))}, ${orario(p.data.starts_at, null)}` : etichettaGruppo(gruppoDi(app.meta, p.data.group_id))}</span>
 
       {#if l.length}
-        <div role="table" aria-label="Campi" class="tabella">
+        <div role="table" aria-label={t('Campi')} class="tabella">
           <div role="row" class="intesta">
-            <span role="columnheader">CAMPO</span>
-            <span role="columnheader">{p.kind === 'update' ? 'PRIMA' : ''}</span>
-            <span role="columnheader">{p.kind === 'update' ? 'DOPO' : 'VALORE'}</span>
+            <span role="columnheader">{t('CAMPO')}</span>
+            <span role="columnheader">{p.kind === 'update' ? t('PRIMA') : ''}</span>
+            <span role="columnheader">{p.kind === 'update' ? t('DOPO') : t('VALORE')}</span>
           </div>
           {#each l as r (r.campo)}
             <div role="row">
@@ -124,26 +125,26 @@
       {/if}
 
       {#if p.note}<p class="citazione">«{p.note}»</p>{/if}
-      {#if p.stale}<p class="errore">L'evento è cambiato dopo questa proposta: si può solo rifiutare.</p>{/if}
+      {#if p.stale}<p class="errore">{t('L\'evento è cambiato dopo questa proposta: si può solo rifiutare.')}</p>{/if}
 
       {#if !p.can_decide}
-        {#if decide}<p class="nota">La tua proposta aspetta una decisione.</p>{/if}
+        {#if decide}<p class="nota">{t('La tua proposta aspetta una decisione.')}</p>{/if}
       {:else}
         {#if fatta}
           <div class="esito" role="status">
-            <span><Icona nome="spunta" size={18} spessore={1.8} />{scelte[p.id] ? 'Approvata da te' : 'Rifiutata da te'}</span>
-            <button type="button" class="collegamento" onclick={() => annulla(p.id)}>Annulla</button>
+            <span><Icona nome="spunta" size={18} spessore={1.8} />{scelte[p.id] ? t('Approvata da te') : t('Rifiutata da te')}</span>
+            <button type="button" class="collegamento" onclick={() => annulla(p.id)}>{t('Annulla')}</button>
           </div>
         {:else}
           <div class="bivio">
-            <button type="button" class="pulsante" disabled={!app.online} onclick={() => scegli(p.id, false)}>Rifiuta</button>
-            <button type="button" class="pulsante accento" disabled={!app.online || p.stale} onclick={() => scegli(p.id, true)}>Approva</button>
+            <button type="button" class="pulsante" disabled={!app.online} onclick={() => scegli(p.id, false)}>{t('Rifiuta')}</button>
+            <button type="button" class="pulsante accento" disabled={!app.online || p.stale} onclick={() => scegli(p.id, true)}>{t('Approva')}</button>
           </div>
         {/if}
       {/if}
     </article>
   {:else}
-    {#if caricate && !errore}<p class="nota">Nessuna proposta in attesa.</p>{/if}
+    {#if caricate && !errore}<p class="nota">{t('Nessuna proposta in attesa.')}</p>{/if}
   {/each}
 </div>
 

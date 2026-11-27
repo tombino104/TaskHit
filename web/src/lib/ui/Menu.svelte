@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Navigazione principale: barra in basso sul telefono.
   import Icona, { type NomeIcona } from './Icona.svelte';
   import { app } from '../store.svelte';
@@ -7,15 +8,15 @@
   type Voce = { id: string; nome: string; icona: NomeIcona };
   const admin = $derived(app.utente?.role === 'admin');
   const gestione: Voce[] = [
-    { id: 'persone', nome: 'Persone', icona: 'profilo' },
-    { id: 'backup', nome: 'Backup', icona: 'aggiorna' },
-    { id: 'profilo', nome: 'Profilo', icona: 'info' },
+    { id: 'persone', nome: t('Persone'), icona: 'profilo' },
+    { id: 'backup', nome: t('Backup'), icona: 'aggiorna' },
+    { id: 'profilo', nome: t('Profilo'), icona: 'info' },
   ];
   const voci: Voce[] = [
-    { id: 'oggi', nome: 'Oggi', icona: 'oggi' },
-    { id: 'calendario', nome: 'Calendario', icona: 'calendario' },
-    { id: 'inbox', nome: 'Inbox', icona: 'inbox' },
-    { id: 'profilo', nome: 'Profilo', icona: 'profilo' },
+    { id: 'oggi', nome: t('Oggi'), icona: 'oggi' },
+    { id: 'calendario', nome: t('Calendario'), icona: 'calendario' },
+    { id: 'inbox', nome: t('Inbox'), icona: 'inbox' },
+    { id: 'profilo', nome: t('Profilo'), icona: 'profilo' },
   ];
 </script>
 
@@ -23,22 +24,22 @@
   <a href="#/{v.id}" aria-current={rotta.nome === v.id ? 'page' : undefined}>
     <Icona nome={v.icona} spessore={rotta.nome === v.id ? 1.6 : 1.5} />{v.nome}
     {#if v.id === 'inbox' && app.inbox.unread && rotta.nome !== 'inbox'}
-      <span class="conta"><span class="nascosto">Non lette: </span>{app.inbox.unread > 99 ? '99+' : app.inbox.unread}</span>
+      <span class="conta"><span class="nascosto">{t('Non lette:')} </span>{app.inbox.unread > 99 ? '99+' : app.inbox.unread}</span>
     {:else if v.id === 'persone' && app.meta?.pending && rotta.nome !== 'persone'}
-      <span class="conta"><span class="nascosto">Richieste in attesa: </span>{app.meta.pending}</span>
+      <span class="conta"><span class="nascosto">{t('Richieste in attesa:')} </span>{app.meta.pending}</span>
     {:else if v.id === 'profilo' && !admin && app.meta?.pending && rotta.nome !== 'profilo'}
-      <span class="conta"><span class="nascosto">Richieste in attesa: </span>{app.meta.pending}</span>
+      <span class="conta"><span class="nascosto">{t('Richieste in attesa:')} </span>{app.meta.pending}</span>
     {/if}
   </a>
 {/snippet}
 
-<nav aria-label="Navigazione principale" class:gestione={admin}>
+<nav aria-label={t('Navigazione principale')} class:gestione={admin}>
   {#if admin}
     {#each gestione as v (v.id)}{@render voce(v)}{/each}
   {:else}
     {@render voce(voci[0]!)}
     {@render voce(voci[1]!)}
-    <a href="#/nuovo" class="aggiungi" aria-label="Nuovo evento"><Icona nome="piu" spessore={1.8} /></a>
+    <a href="#/nuovo" class="aggiungi" aria-label={t('Nuovo evento')}><Icona nome="piu" spessore={1.8} /></a>
     {@render voce(voci[2]!)}
     {@render voce(voci[3]!)}
   {/if}

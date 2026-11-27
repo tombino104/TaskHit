@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // L'avviso per chi è sospeso o espulso: compare solo dopo aver scritto la password giusta.
   import type { Blocco } from '../api';
   import { nomiMotivi, statoBlocco } from '../moderazione';
@@ -6,11 +7,11 @@
 </script>
 
 <div class="blocco" role="alert">
-  <strong>{blocco.kind === 'espulso' ? 'Il tuo account è stato espulso' : 'Il tuo account è sospeso'}</strong>
+  <strong>{blocco.kind === 'espulso' ? t('Il tuo account è stato espulso') : t('Il tuo account è sospeso')}</strong>
   {#if blocco.until}<span>{statoBlocco(blocco)}.</span>{/if}
-  {#if blocco.tags.length}<span>Motivo: {nomiMotivi(blocco.tags)}.</span>{/if}
+  {#if blocco.tags.length}<span>{t('Motivo: {motivi}.', { motivi: nomiMotivi(blocco.tags) })}</span>{/if}
   {#if blocco.reason}<q>{blocco.reason}</q>{/if}
-  <span class="nota">Se pensi sia un errore, parlane con un rappresentante o con l’admin.</span>
+  <span class="nota">{t('Se pensi sia un errore, parlane con un rappresentante o con l’admin.')}</span>
 </div>
 
 <style>

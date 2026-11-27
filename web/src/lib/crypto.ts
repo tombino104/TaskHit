@@ -6,6 +6,7 @@
 //   DEK (casuale, 32 B)  --AES-256-GCM(wrap_key)--> wrapped_key (al server)
 //
 // Gli eventi privati e il profilo sono cifrati con la DEK. Cambiare password = ri-cifrare solo la DEK.
+import { t } from './i18n';
 import { argon2id } from 'hash-wasm';
 
 const enc = new TextEncoder();
@@ -105,7 +106,7 @@ export function newRecoveryKey(): { text: string; bytes: Uint8Array } {
 
 export function parseRecoveryKey(text: string): Uint8Array {
   const clean = text.toUpperCase().replace(/[^A-Z2-7]/g, '');
-  if (clean.length !== 32) throw new Error('La chiave di recupero ha 32 caratteri.');
+  if (clean.length !== 32) throw new Error(t('La chiave di recupero ha 32 caratteri.'));
   let bits = '';
   for (const ch of clean) bits += ALPHABET.indexOf(ch).toString(2).padStart(5, '0');
   const out = new Uint8Array(20);

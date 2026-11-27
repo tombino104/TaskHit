@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Composizione dei gruppi: si trascina un nome in un gruppo, oppure lo si tocca e poi si sceglie «Qui».
   // Il trascinamento usa i pointer event (quello nativo non funziona al tocco). Sul telefono si trascina
   // dalla maniglia, così il resto del nome lascia scorrere la pagina.
@@ -12,7 +13,7 @@
   } = $props();
 
   const libere = $derived(daAssegnare(persone, bozze));
-  const nome = (id: string) => persone.find((p) => p.id === id)?.name ?? 'Non più in classe';
+  const nome = (id: string) => persone.find((p) => p.id === id)?.name ?? t('Non più in classe');
 
   let scelta = $state<string | null>(null);
   let trascina = $state<{ id: string; x: number; y: number; attivo: boolean } | null>(null);
@@ -70,18 +71,18 @@
 
 {#snippet qui(zona: number | null, dove: string)}
   {#if scelta && !dentro(zona)}
-    <button type="button" class="qui" onclick={() => metti(scelta!, zona)}>Metti {nome(scelta)} {dove}</button>
+    <button type="button" class="qui" onclick={() => metti(scelta!, zona)}>{t('Metti {nome} {dove}', { nome: nome(scelta), dove })}</button>
   {/if}
 {/snippet}
 
-<p class="nota" role="status">{scelta ? `${nome(scelta)} è selezionato: scegli dove metterlo.` : 'Trascina un nome in un gruppo, oppure toccalo e scegli dove metterlo. La stella indica il capogruppo.'}</p>
+<p class="nota" role="status">{scelta ? t('{nome} è selezionato: scegli dove metterlo.', { nome: nome(scelta) }) : t('Trascina un nome in un gruppo, oppure toccalo e scegli dove metterlo. La stella indica il capogruppo.')}</p>
 
-<section class="zona libere" data-zona="fuori" class:sopra={sopra === 'fuori'} aria-label="Da assegnare">
-  <h2 class="dato">Da assegnare · {libere.length}</h2>
+<section class="zona libere" data-zona="fuori" class:sopra={sopra === 'fuori'} aria-label={t('Da assegnare')}>
+  <h2 class="dato">{t('Da assegnare · {n}', { n: libere.length })}</h2>
   <div class="nomi">
-    {#each libere as p (p.id)}{@render persona(p.id)}{:else}<span class="nota">Tutti hanno un gruppo.</span>{/each}
+    {#each libere as p (p.id)}{@render persona(p.id)}{:else}<span class="nota">{t('Tutti hanno un gruppo.')}</span>{/each}
   </div>
-  {@render qui(null, 'tra quelli da assegnare')}
+  {@render qui(null, t('tra quelli da assegnare'))}
 </section>
 
 <div class="gruppi">
@@ -90,8 +91,8 @@
       <div class="testa">
         {#if fisso}<h2 class="serif">{b.nome}</h2>
         {:else}
-          <input class="serif" bind:value={b.nome} maxlength="40" aria-label="Nome del gruppo {i + 1}" />
-          <button type="button" class="tondo" aria-label="Togli {b.nome}" onclick={() => (bozze = bozze.filter((_, k) => k !== i))}><Icona nome="chiudi" size={16} /></button>
+          <input class="serif" bind:value={b.nome} maxlength="40" aria-label={t('Nome del gruppo {n}', { n: i + 1 })} />
+          <button type="button" class="tondo" aria-label={t('Togli {nome}', { nome: b.nome })} onclick={() => (bozze = bozze.filter((_, k) => k !== i))}><Icona nome="chiudi" size={16} /></button>
         {/if}
         <span class="mono tenue">{b.membri.length}</span>
       </div>
@@ -99,15 +100,15 @@
         {#each b.membri as m (m)}
           <li>
             {@render persona(m)}
-            <button type="button" class="stella" aria-pressed={b.capo === m} aria-label="{nome(m)} capogruppo di {b.nome}" onclick={() => (bozze = nominaCapo(bozze, i, m))}>
+            <button type="button" class="stella" aria-pressed={b.capo === m} aria-label={t('{nome} capogruppo di {gruppo}', { nome: nome(m), gruppo: b.nome })} onclick={() => (bozze = nominaCapo(bozze, i, m))}>
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z" /></svg>
-              {#if b.capo === m}<span>Capo</span>{/if}
+              {#if b.capo === m}<span>{t('Capo')}</span>{/if}
             </button>
           </li>
         {/each}
       </ul>
-      {#if !b.membri.length}<p class="vuoto">Trascina qui</p>{/if}
-      {@render qui(i, `in ${b.nome}`)}
+      {#if !b.membri.length}<p class="vuoto">{t('Trascina qui')}</p>{/if}
+      {@render qui(i, t('in {gruppo}', { gruppo: b.nome }))}
     </section>
   {/each}
 </div>

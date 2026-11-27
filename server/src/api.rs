@@ -7,11 +7,11 @@ use crate::{
     events, meta, people, proposals,
     ratelimit::now_secs,
     state::{AppState, ClientIp},
-    themes,
+    languages, themes,
 };
 use axum::{
     Extension, Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::{StatusCode, HeaderMap, HeaderValue, header::{SET_COOKIE, USER_AGENT}},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -35,6 +35,8 @@ pub fn routes() -> Router<AppState> {
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/themes", get(list_themes))
+        .route("/languages", get(list_languages))
+        .route("/languages/{id}", get(get_language))
         .merge(events::routes())
         .merge(proposals::routes())
         .merge(people::routes())
@@ -294,6 +296,18 @@ async fn logout(State(st): State<AppState>, user: AuthUser) -> Result<Response, 
         res.headers_mut().append(SET_COOKIE, v);
     }
     Ok(res)
+}
+
+async fn list_languages(State(st): State<AppState>) -> Result<Json<languages::LanguageList>, ApiError> {
+    let dir = st.cfg.languages_dir();
+    let list = tokio::task::spawn_blocking(move || languages::list(&dir)).await.map_err(ApiError::internal)?;
+    Ok(Json(list))
+}
+
+async fn get_language(State(st): State<AppState>, Path(id): Path<String>) -> Result<Json<languages::Language>, ApiError> {
+    let dir = st.cfg.languages_dir();
+    let found = tokio::task::spawn_blocking(move || languages::get(&dir, &id)).await.map_err(ApiError::internal)?;
+    found.map(Json).ok_or(ApiError::NotFound)
 }
 
 async fn list_themes(State(st): State<AppState>) -> Result<Json<themes::ThemeList>, ApiError> {

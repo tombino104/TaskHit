@@ -1,7 +1,8 @@
 // Date in italiano e conti sul calendario, nel fuso del dispositivo. La settimana inizia di lunedì.
+import { t } from './i18n';
 
-export const MESI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-export const GIORNI = ['lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato', 'domenica'];
+export const MESI = [t('gennaio'), t('febbraio'), t('marzo'), t('aprile'), t('maggio'), t('giugno'), t('luglio'), t('agosto'), t('settembre'), t('ottobre'), t('novembre'), t('dicembre')];
+export const GIORNI = [t('lunedì'), t('martedì'), t('mercoledì'), t('giovedì'), t('venerdì'), t('sabato'), t('domenica')];
 
 export const maiuscola = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const due = (n: number) => String(n).padStart(2, '0');
@@ -63,18 +64,18 @@ export const momento = (secondi: number): string => { const d = daSecondi(second
 /** "Oggi", "Ieri" oppure "Venerdì 20 novembre". */
 export function giornoRelativo(secondi: number, adesso: Date): string {
   const k = chiaveDi(secondi);
-  if (k === chiave(adesso)) return 'Oggi';
-  if (k === chiave(piuGiorni(adesso, -1))) return 'Ieri';
+  if (k === chiave(adesso)) return t('Oggi');
+  if (k === chiave(piuGiorni(adesso, -1))) return t('Ieri');
   return dataLunga(daSecondi(secondi));
 }
 
 /** "2 ore fa", "ieri, 19:20", "20 nov, 17:42" */
 export function quantoFa(secondi: number, adesso: Date): string {
   const minuti = Math.floor((adesso.getTime() / 1000 - secondi) / 60);
-  if (minuti < 1) return 'adesso';
-  if (minuti < 60) return `${minuti} min fa`;
-  if (chiaveDi(secondi) === chiave(adesso)) { const h = Math.floor(minuti / 60); return h === 1 ? "un'ora fa" : `${h} ore fa`; }
-  if (chiaveDi(secondi) === chiave(piuGiorni(adesso, -1))) return `ieri, ${ora(secondi)}`;
+  if (minuti < 1) return t('adesso');
+  if (minuti < 60) return t('{n} min fa', { n: minuti });
+  if (chiaveDi(secondi) === chiave(adesso)) { const h = Math.floor(minuti / 60); return h === 1 ? t("un'ora fa") : t('{n} ore fa', { n: h }); }
+  if (chiaveDi(secondi) === chiave(piuGiorni(adesso, -1))) return t('ieri, {ora}', { ora: ora(secondi) });
   return momento(secondi);
 }
 

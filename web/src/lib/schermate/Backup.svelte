@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Backup automatici e manuali, scaricamento e ripristino. Solo per l'admin.
   import { onMount } from 'svelte';
   import Icona from '../ui/Icona.svelte';
@@ -11,7 +12,7 @@
 
   type Ricorrenza = 'giorno' | 'settimana' | 'scelta';
   const TUTTI = [1, 2, 3, 4, 5, 6, 7];
-  const NOMI = { auto: 'Automatico', manuale: 'Manuale', caricato: 'Caricato', sicurezza: 'Prima di un ripristino' } as const;
+  const NOMI = { auto: t('Automatico'), manuale: t('Manuale'), caricato: t('Caricato'), sicurezza: t('Prima di un ripristino') } as const;
 
   let stato = $state<StatoBackup | null>(null);
   let ricorrenza = $state<Ricorrenza>('giorno');
@@ -65,7 +66,7 @@
     try {
       await api.backupAdesso();
       await carica();
-      avvisa('Backup creato.');
+      avvisa(t('Backup creato.'));
     } catch (e) { avvisa(messaggio(e)); } finally { occupato = ''; }
   }
 
@@ -78,7 +79,7 @@
     try {
       await api.caricaBackup(file);
       await carica();
-      avvisa('Backup aggiunto all’archivio. Per usarlo premi «Ripristina».');
+      avvisa(t('Backup aggiunto all’archivio. Per usarlo premi «Ripristina».'));
     } catch (e) { avvisa(messaggio(e)); } finally { occupato = ''; }
   }
 
@@ -89,7 +90,7 @@
     try {
       await ripristina(daRipristinare.name, password);
       sostituisci('accesso');
-      avvisa('Backup ripristinato. Accedi con la password che avevi in quella data.');
+      avvisa(t('Backup ripristinato. Accedi con la password che avevi in quella data.'));
     } catch (e) { erroreFoglio = messaggio(e); } finally { occupato = ''; }
   }
 
@@ -108,66 +109,66 @@
 </script>
 
 <div class="schermata con-menu backup">
-  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
-  <span class="dato occhio">Pannello admin</span>
-  <h1 class="titolo sottolineato">Backup</h1>
+  <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />{t('Profilo')}</a>
+  <span class="dato occhio">{t('Pannello admin')}</span>
+  <h1 class="titolo sottolineato">{t('Backup')}</h1>
 
   {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
 
   {#if stato && impostazioni}
     <section>
-      <p class="stato">{ultimo ? `Ultimo backup: ${momento(ultimo.created_at)}.` : 'Nessun backup, per ora.'}</p>
-      <p class="nota">{stato.next ? `Il prossimo automatico: ${momento(stato.next)}.` : 'I backup automatici sono spenti.'}</p>
+      <p class="stato">{ultimo ? t('Ultimo backup: {quando}.', { quando: momento(ultimo.created_at) }) : t('Nessun backup, per ora.')}</p>
+      <p class="nota">{stato.next ? t('Il prossimo automatico: {quando}.', { quando: momento(stato.next) }) : t('I backup automatici sono spenti.')}</p>
       {#if stato.error}<p class="errore" role="alert">{stato.error}</p>{/if}
       <button type="button" class="pulsante" disabled={fermo} aria-busy={occupato === 'crea'} onclick={adesso}>
-        <Icona nome="aggiorna" size={18} />{occupato === 'crea' ? 'Copio i dati…' : 'Esegui un backup adesso'}
+        <Icona nome="aggiorna" size={18} />{occupato === 'crea' ? t('Copio i dati…') : t('Esegui un backup adesso')}
       </button>
     </section>
 
     <section>
-      <Interruttore nome="Backup automatici" descrizione="Se il server è spento all’orario previsto, il backup parte alla riaccensione."
+      <Interruttore nome={t('Backup automatici')} descrizione={t('Se il server è spento all’orario previsto, il backup parte alla riaccensione.')}
         attivo={impostazioni.enabled} disabilitato={fermo} onchange={(enabled) => salva({ enabled })} />
     </section>
 
     {#if impostazioni.enabled}
       <section>
-        <h2 class="dato">Ricorrenza</h2>
-        <div role="radiogroup" aria-label="Ricorrenza" class="segmenti">
-          <button type="button" role="radio" aria-checked={ricorrenza === 'giorno'} disabled={fermo} onclick={() => scegliRicorrenza('giorno')}>Ogni giorno</button>
-          <button type="button" role="radio" aria-checked={ricorrenza === 'settimana'} disabled={fermo} onclick={() => scegliRicorrenza('settimana')}>Ogni settimana</button>
-          <button type="button" role="radio" aria-checked={ricorrenza === 'scelta'} disabled={fermo} onclick={() => scegliRicorrenza('scelta')}>Personalizzata</button>
+        <h2 class="dato">{t('Ricorrenza')}</h2>
+        <div role="radiogroup" aria-label={t('Ricorrenza')} class="segmenti">
+          <button type="button" role="radio" aria-checked={ricorrenza === 'giorno'} disabled={fermo} onclick={() => scegliRicorrenza('giorno')}>{t('Ogni giorno')}</button>
+          <button type="button" role="radio" aria-checked={ricorrenza === 'settimana'} disabled={fermo} onclick={() => scegliRicorrenza('settimana')}>{t('Ogni settimana')}</button>
+          <button type="button" role="radio" aria-checked={ricorrenza === 'scelta'} disabled={fermo} onclick={() => scegliRicorrenza('scelta')}>{t('Personalizzata')}</button>
         </div>
         {#if ricorrenza !== 'giorno'}
-          <div class="scelte" role="group" aria-label="Giorni">
+          <div class="scelte" role="group" aria-label={t('Giorni')}>
             {#each GIORNI as nome, i (nome)}
               <button type="button" class="scelta" aria-pressed={impostazioni.days.includes(i + 1)} aria-label={maiuscola(nome)} disabled={fermo} onclick={() => toccaGiorno(i + 1)}>{maiuscola(nome.slice(0, 3))}</button>
             {/each}
           </div>
         {/if}
-        <label class="campo"><span class="dato">Orario ({stato.timezone})</span>
+        <label class="campo"><span class="dato">{t('Orario ({fuso})', { fuso: stato.timezone })}</span>
           <input class="mono" type="time" value={impostazioni.time} disabled={fermo} onchange={(e) => e.currentTarget.value && salva({ time: e.currentTarget.value })} /></label>
       </section>
     {/if}
 
     <section>
-      <h2 class="dato">Conserva</h2>
+      <h2 class="dato">{t('Conserva')}</h2>
       <div class="conserva">
-        <span><span class="quanti">{impostazioni.keep}</span><span>backup più recenti</span></span>
+        <span><span class="quanti">{impostazioni.keep}</span><span>{t('backup più recenti')}</span></span>
         <span class="passo">
-          <button type="button" class="tondo" aria-label="Conserva meno backup" disabled={fermo || impostazioni.keep <= 1} onclick={() => salva({ keep: impostazioni.keep - 1 })}><Icona nome="meno" size={18} spessore={1.6} /></button>
-          <button type="button" class="tondo" aria-label="Conserva più backup" disabled={fermo || impostazioni.keep >= 90} onclick={() => salva({ keep: impostazioni.keep + 1 })}><Icona nome="piu" size={18} spessore={1.6} /></button>
+          <button type="button" class="tondo" aria-label={t('Conserva meno backup')} disabled={fermo || impostazioni.keep <= 1} onclick={() => salva({ keep: impostazioni.keep - 1 })}><Icona nome="meno" size={18} spessore={1.6} /></button>
+          <button type="button" class="tondo" aria-label={t('Conserva più backup')} disabled={fermo || impostazioni.keep >= 90} onclick={() => salva({ keep: impostazioni.keep + 1 })}><Icona nome="piu" size={18} spessore={1.6} /></button>
         </span>
       </div>
-      <p class="nota">Quando ne arriva uno nuovo, quelli più vecchi oltre il limite vengono eliminati.</p>
+      <p class="nota">{t('Quando ne arriva uno nuovo, quelli più vecchi oltre il limite vengono eliminati.')}</p>
     </section>
 
     <section>
-      <h2 class="dato">Archivio</h2>
+      <h2 class="dato">{t('Archivio')}</h2>
       <p class="nota">
-        {#if stato.copy.active && (stato.copy.latest_copied || !ultimo)}Ogni backup viene copiato anche nella cartella scelta sul server.
-        {:else if stato.copy.active}Attenzione: l’ultimo backup non risulta nella cartella scelta sul server.
-        {:else}Questi file stanno dentro l’app: se la disinstalli o si guasta il disco, si perdono. Scaricane uno ogni tanto.{/if}
-        Ogni file contiene tutti i dati e la chiave per aprirli: conservalo al sicuro.
+        {#if stato.copy.active && (stato.copy.latest_copied || !ultimo)}{t('Ogni backup viene copiato anche nella cartella scelta sul server.')}
+        {:else if stato.copy.active}{t('Attenzione: l’ultimo backup non risulta nella cartella scelta sul server.')}
+        {:else}{t('Questi file stanno dentro l’app: se la disinstalli o si guasta il disco, si perdono. Scaricane uno ogni tanto.')}{/if}
+        {t('Ogni file contiene tutti i dati e la chiave per aprirli: conservalo al sicuro.')}
       </p>
       {#if stato.items.length}
         <ul class="elenco">
@@ -175,44 +176,44 @@
             <li>
               <span class="voce"><span>{momento(b.created_at)}</span><span class="dato tenue">{NOMI[b.kind]} · {peso(b.size)}</span></span>
               <span class="azioni">
-                <a class="collegamento" href={api.scaricaBackup(b.name)} download={b.name}>Scarica</a>
-                <button type="button" class="collegamento" disabled={fermo} onclick={() => { password = ''; erroreFoglio = ''; daRipristinare = b; }}>Ripristina</button>
-                <button type="button" class="tondo" aria-label="Elimina il backup del {momento(b.created_at)}" disabled={fermo} onclick={() => (daEliminare = b)}><Icona nome="cestino" size={18} /></button>
+                <a class="collegamento" href={api.scaricaBackup(b.name)} download={b.name}>{t('Scarica')}</a>
+                <button type="button" class="collegamento" disabled={fermo} onclick={() => { password = ''; erroreFoglio = ''; daRipristinare = b; }}>{t('Ripristina')}</button>
+                <button type="button" class="tondo" aria-label={t('Elimina il backup del {quando}', { quando: momento(b.created_at) })} disabled={fermo} onclick={() => (daEliminare = b)}><Icona nome="cestino" size={18} /></button>
               </span>
             </li>
           {/each}
         </ul>
       {:else}
-        <p class="vuoto">Nessun backup.</p>
+        <p class="vuoto">{t('Nessun backup.')}</p>
       {/if}
       <label class="pulsante tratteggiato carica">
-        <Icona nome="carica" size={18} />{occupato === 'carica' ? 'Controllo il file…' : 'Carica un backup salvato'}
+        <Icona nome="carica" size={18} />{occupato === 'carica' ? t('Controllo il file…') : t('Carica un backup salvato')}
         <input class="nascosto" type="file" accept=".tar,application/x-tar" disabled={fermo} onchange={caricato} />
       </label>
     </section>
 
-    <p class="destinazione">Cartella sul server<br />{stato.dir}</p>
+    <p class="destinazione">{t('Cartella sul server')}<br />{stato.dir}</p>
   {:else if !errore}
-    <p class="dato" role="status">Caricamento…</p>
+    <p class="dato" role="status">{t('Caricamento…')}</p>
   {/if}
 </div>
 
 {#if daRipristinare}
-  <Foglio titolo="Ripristina" onclose={() => occupato || (daRipristinare = null)}>
+  <Foglio titolo={t('Ripristina')} onclose={() => occupato || (daRipristinare = null)}>
     <form onsubmit={conferma}>
-      <p>Tutto torna com’era il <strong>{momento(daRipristinare.created_at)}</strong>: eventi, persone, password e impostazioni. Ciò che è arrivato dopo sparisce.</p>
-      <p class="nota">Prima viene salvata una copia dello stato di adesso. Poi tutti dovranno accedere di nuovo, con la password che avevano in quella data.</p>
-      <label class="campo"><span class="dato">La tua password</span><input type="password" bind:value={password} required autocomplete="current-password" /></label>
+      <p>{t('Tutto torna com’era il')} <strong>{momento(daRipristinare.created_at)}</strong>{t(': eventi, persone, password e impostazioni. Ciò che è arrivato dopo sparisce.')}</p>
+      <p class="nota">{t('Prima viene salvata una copia dello stato di adesso. Poi tutti dovranno accedere di nuovo, con la password che avevano in quella data.')}</p>
+      <label class="campo"><span class="dato">{t('La tua password')}</span><input type="password" bind:value={password} required autocomplete="current-password" /></label>
       {#if erroreFoglio}<p class="errore" role="alert">{erroreFoglio}</p>{/if}
-      <button class="pulsante accento grande" disabled={fermo} aria-busy={occupato === 'ripristina'}>{occupato === 'ripristina' ? 'Ripristino…' : 'Ripristina questo backup'}</button>
+      <button class="pulsante accento grande" disabled={fermo} aria-busy={occupato === 'ripristina'}>{occupato === 'ripristina' ? t('Ripristino…') : t('Ripristina questo backup')}</button>
     </form>
   </Foglio>
 {/if}
 
 {#if daEliminare}
-  <Foglio titolo="Elimina backup" onclose={() => (daEliminare = null)}>
-    <p>Il backup del <strong>{momento(daEliminare.created_at)}</strong> viene cancellato per sempre.</p>
-    <button type="button" class="pulsante pieno grande" disabled={fermo} onclick={elimina}>Elimina</button>
+  <Foglio titolo={t('Elimina backup')} onclose={() => (daEliminare = null)}>
+    <p>{t('Il backup del')} <strong>{momento(daEliminare.created_at)}</strong> {t('viene cancellato per sempre.')}</p>
+    <button type="button" class="pulsante pieno grande" disabled={fermo} onclick={elimina}>{t('Elimina')}</button>
   </Foglio>
 {/if}
 

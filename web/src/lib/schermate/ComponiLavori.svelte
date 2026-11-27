@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Il rappresentante compone i gruppi di un lavoro, oppure sposta le persone tra gruppi già creati.
   import { untrack } from 'svelte';
   import Icona from '../ui/Icona.svelte';
@@ -29,19 +30,19 @@
   let errore = $state('');
   let occupato = $state(false);
 
-  const DURATE: [number, string][] = [[7, '1 sett.'], [14, '2 sett.'], [30, '1 mese'], [90, '3 mesi']];
+  const DURATE: [number, string][] = [[7, t('1 sett.')], [14, t('2 sett.')], [30, t('1 mese')], [90, t('3 mesi')]];
   const libere = $derived(daAssegnare(persone, bozze).length);
   const manca = $derived(
-    !modifica && !attivita.trim() ? 'Scrivi il nome del lavoro.'
-    : !modifica && !(Number.isInteger(giorni) && giorni >= 1 && giorni <= MAX_GIORNI) ? `La durata va da 1 a ${MAX_GIORNI} giorni.`
-    : bozze.some((b) => b.membri.length && !b.capo) ? 'Scegli un capogruppo per ogni gruppo.'
+    !modifica && !attivita.trim() ? t('Scrivi il nome del lavoro.')
+    : !modifica && !(Number.isInteger(giorni) && giorni >= 1 && giorni <= MAX_GIORNI) ? t('La durata va da 1 a {max} giorni.', { max: MAX_GIORNI })
+    : bozze.some((b) => b.membri.length && !b.capo) ? t('Scegli un capogruppo per ogni gruppo.')
     : problema(bozze),
   );
 
   function aggiungi() {
     let n = bozze.length + 1;
-    while (bozze.some((b) => b.nome === `Gruppo ${n}`)) n++;
-    bozze = [...bozze, { nome: `Gruppo ${n}`, membri: [], capo: null }];
+    while (bozze.some((b) => b.nome === t('Gruppo {n}', { n }))) n++;
+    bozze = [...bozze, { nome: t('Gruppo {n}', { n }), membri: [], capo: null }];
   }
 
   async function salva() {
@@ -55,7 +56,7 @@
         await api.creaGruppiLavoro({ class_id: classeId!, activity: attivita.trim(), days: giorni, groups: dati.map((b) => ({ name: b.nome.trim(), member_ids: b.membri, leader_id: b.capo! })) });
       }
       await sincronizza();
-      avvisa(modifica ? 'Gruppi aggiornati.' : dati.length === 1 ? 'Gruppo creato.' : `${dati.length} gruppi creati.`);
+      avvisa(modifica ? t('Gruppi aggiornati.') : dati.length === 1 ? t('Gruppo creato.') : t('{n} gruppi creati.', { n: dati.length }));
       sostituisci('lavori');
     } catch (e) {
       errore = messaggio(e);
@@ -65,45 +66,45 @@
 </script>
 
 <div class="schermata componi">
-  <button type="button" class="torna" onclick={() => vai('lavori')}><Icona nome="sinistra" size={20} />Gruppi di lavoro</button>
-  <h1 class="titolo sottolineato">{modifica ? attivita : 'Nuovi gruppi'}</h1>
+  <button type="button" class="torna" onclick={() => vai('lavori')}><Icona nome="sinistra" size={20} />{t('Gruppi di lavoro')}</button>
+  <h1 class="titolo sottolineato">{modifica ? attivita : t('Nuovi gruppi')}</h1>
 
   {#if modifica && !esistenti.length}
-    <p class="lede">Non ci sono gruppi aperti da risistemare.</p>
+    <p class="lede">{t('Non ci sono gruppi aperti da risistemare.')}</p>
   {:else if !classi.length}
-    <p class="lede">Serve far parte di una classe come rappresentante.</p>
+    <p class="lede">{t('Serve far parte di una classe come rappresentante.')}</p>
   {:else}
     {#if !modifica}
-      <label class="campo"><span class="dato">Nome del lavoro</span><input bind:value={attivita} maxlength="60" placeholder="es. Ricerca di storia" /></label>
+      <label class="campo"><span class="dato">{t('Nome del lavoro')}</span><input bind:value={attivita} maxlength="60" placeholder={t('es. Ricerca di storia')} /></label>
       {#if classi.length > 1}
-        <label class="campo"><span class="dato">Classe</span>
+        <label class="campo"><span class="dato">{t('Classe')}</span>
           <select value={classeId} onchange={(e) => { sceltaClasse = e.currentTarget.value; bozze = bozze.map((b) => ({ ...b, membri: [], capo: null })); }}>
             {#each classi as c (c.id)}<option value={c.id}>{c.name}</option>{/each}
           </select>
         </label>
       {/if}
       <fieldset>
-        <legend class="dato">Durata</legend>
-        <div role="radiogroup" aria-label="Durata" class="segmenti">
+        <legend class="dato">{t('Durata')}</legend>
+        <div role="radiogroup" aria-label={t('Durata')} class="segmenti">
           {#each DURATE as [n, testo] (n)}<button type="button" role="radio" aria-checked={giorni === n} onclick={() => (giorni = n)}>{testo}</button>{/each}
         </div>
-        <label class="giorni">oppure <input type="number" min="1" max={MAX_GIORNI} bind:value={giorni} /> giorni <span class="nota">(massimo {MAX_GIORNI})</span></label>
+        <label class="giorni">{t('oppure')} <input type="number" min="1" max={MAX_GIORNI} bind:value={giorni} /> {t('giorni')} <span class="nota">{t('(massimo {max})', { max: MAX_GIORNI })}</span></label>
       </fieldset>
     {/if}
 
     <div class="strumenti">
-      {#if !modifica}<button type="button" class="pulsante" onclick={aggiungi} disabled={bozze.length >= 15}><Icona nome="piu" size={16} />Gruppo</button>{/if}
-      <button type="button" class="pulsante" disabled={!bozze.length} onclick={() => (bozze = aCaso(bozze, persone.map((p) => p.id)))}>A caso</button>
-      <button type="button" class="pulsante" onclick={() => (bozze = bozze.map((b) => ({ ...b, membri: [], capo: null })))}>Svuota</button>
+      {#if !modifica}<button type="button" class="pulsante" onclick={aggiungi} disabled={bozze.length >= 15}><Icona nome="piu" size={16} />{t('Gruppo')}</button>{/if}
+      <button type="button" class="pulsante" disabled={!bozze.length} onclick={() => (bozze = aCaso(bozze, persone.map((p) => p.id)))}>{t('A caso')}</button>
+      <button type="button" class="pulsante" onclick={() => (bozze = bozze.map((b) => ({ ...b, membri: [], capo: null })))}>{t('Svuota')}</button>
     </div>
 
     <Lavagna {persone} bind:bozze fisso={modifica} />
 
     <footer>
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
-      <p class="nota">{manca || (libere ? `${libere} ${libere === 1 ? 'persona resta' : 'persone restano'} senza gruppo.` : 'Tutto pronto.')}</p>
+      <p class="nota">{manca || (libere ? libere === 1 ? t('1 persona resta senza gruppo.') : t('{n} persone restano senza gruppo.', { n: libere }) : t('Tutto pronto.'))}</p>
       <button type="button" class="pulsante pieno grande" disabled={occupato || !app.online || !!manca} aria-busy={occupato} onclick={salva}>
-        {occupato ? 'Salvo…' : modifica ? 'Salva' : bozze.length === 1 ? 'Crea il gruppo' : `Crea ${bozze.length} gruppi`}
+        {occupato ? t('Salvo…') : modifica ? t('Salva') : bozze.length === 1 ? t('Crea il gruppo') : t('Crea {n} gruppi', { n: bozze.length })}
       </button>
     </footer>
   {/if}

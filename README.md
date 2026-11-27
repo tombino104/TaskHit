@@ -43,7 +43,19 @@ I limiti di sicurezza e ciò che non è stato verificato sono in [`ARCHITETTURA.
 
 ## Temi
 
-![La stessa schermata nei temi Carta, Quaderno, Notte e Lavagna](docs/img/temi.png)
+Ogni tema è un solo file JSON con la versione **chiara** e quella **scura**: si sceglie il tema e, a parte, la modalità.
+
+![La stessa schermata con diversi colori](docs/img/temi.png)
+
+## Lingue
+
+L'app è in **italiano** e in **inglese**; di partenza segue la lingua del dispositivo e si cambia in «Aspetto» (o dalla schermata di accesso). Per aggiungerne una, copia in `/data/languages/` un file con il codice della lingua, per esempio `fr.json`:
+
+```json
+{ "nome": "Français", "testi": { "Salva": "Enregistrer", "Annulla": "Annuler" } }
+```
+
+Le chiavi sono i testi italiani; quelli mancanti restano in italiano. L'elenco completo è in [server/languages-default/en.json](server/languages-default/en.json). Un file `en.json` nella cartella ritocca solo i testi inglesi che contiene.
 
 ## Com'è fatta
 
@@ -68,7 +80,7 @@ Sviluppo dell'interfaccia con ricarica a caldo: `cd web && npm run dev` (inoltra
 
 ```bash
 cd server && cargo test                 # 20 test di integrazione e 1 unitario
-cd web && npm test                      # crittografia, date, eventi, temi
+cd web && npm test                      # crittografia, date, eventi, temi, traduzioni
 cd web && npx svelte-check --tsgo       # tipi
 
 # end-to-end del client contro un server vuoto in esecuzione
@@ -96,7 +108,7 @@ cd web && TASKHIT_E2E_URL=http://127.0.0.1:8080 npx vitest run src/lib/e2e.test.
 
 Da *Profilo → Backup* l'amministratore sceglie quando farli (di partenza: ogni notte alle 03:00, conservando gli ultimi 14), li scarica e li ripristina.
 
-- **Cosa contengono**: database, la chiave che lo apre e i temi. Chi ha il file ha i dati pubblici e gli account: conservalo al sicuro. Gli eventi privati restano cifrati.
+- **Cosa contengono**: database, la chiave che lo apre, i temi e le lingue aggiunte. Chi ha il file ha i dati pubblici e gli account: conservalo al sicuro. Gli eventi privati restano cifrati.
 - **Dove stanno**: in `backups/` dentro la cartella dei dati. Se disinstalli l'app o si guasta il disco spariscono con lei: scaricali ogni tanto, oppure scegli una cartella per la seconda copia (su Umbrel nelle impostazioni dell'app; altrove con `TASKHIT_BACKUP_COPY_DIR`). La seconda copia non viene mai sfoltita.
 - **Ripristino**: dall'archivio, con la password; prima viene salvata una copia dello stato attuale e poi tutti accedono di nuovo. Su un'installazione nuova: *Hai un backup? Ripristinalo*, nella prima schermata (dall'indirizzo di casa).
 

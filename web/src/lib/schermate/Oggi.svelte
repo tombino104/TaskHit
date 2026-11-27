@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Avatar from '../ui/Avatar.svelte';
   import Icona from '../ui/Icona.svelte';
   import RigaEvento from '../ui/RigaEvento.svelte';
@@ -16,7 +17,7 @@
   const prossimi = $derived([...giorni.keys()].filter((k) => k > oggi).sort().slice(0, 2));
   const classe = $derived(app.meta?.groups.find((g) => g.mine && g.kind === 'classe')?.name);
   const testata = $derived(
-    [classe ?? app.meta?.settings.instance_name, app.meta?.settings.school_year && `A.S. ${app.meta.settings.school_year}`].filter(Boolean).join(' · '),
+    [classe ?? app.meta?.settings.instance_name, app.meta?.settings.school_year && t('A.S. {anno}', { anno: app.meta.settings.school_year })].filter(Boolean).join(' · '),
   );
 </script>
 
@@ -25,13 +26,13 @@
     <div class="alto">
       <span class="marchio">TaskHit</span>
       <div class="azioni">
-        <a href="#/cerca" class="tondo" aria-label="Cerca"><Icona nome="cerca" /></a>
-        <a href="#/profilo" class="profilo" aria-label="Il tuo profilo"><Avatar nome={app.utente?.display_name ?? ''} persona={app.utente?.id} /></a>
+        <a href="#/cerca" class="tondo" aria-label={t('Cerca')}><Icona nome="cerca" /></a>
+        <a href="#/profilo" class="profilo" aria-label={t('Il tuo profilo')}><Avatar nome={app.utente?.display_name ?? ''} persona={app.utente?.id} /></a>
       </div>
     </div>
     <div class="dato striscia">
-      <span>{testata || 'Calendario'}{app.online ? '' : ' · offline'}</span>
-      <span>Settimana {numeroSettimana(adesso)}</span>
+      <span>{testata || t('Calendario')}{app.online ? '' : t(' · offline')}</span>
+      <span>{t('Settimana {n}', { n: numeroSettimana(adesso) })}</span>
     </div>
   </header>
 
@@ -41,13 +42,13 @@
     <p class="frase">{fraseOggi(app.eventi, app.meta, adesso)}</p>
   </section>
 
-  <ul class="settimana" aria-label="Settimana">
+  <ul class="settimana" aria-label={t('Settimana')}>
     {#each settimana(adesso) as d, i (i)}
       {@const k = chiave(d)}
       {@const del = giorni.get(k) ?? []}
       <li>
         <a href="#/calendario/{k}" class:presente={k === oggi} class:festivo={i >= 5} aria-current={k === oggi ? 'date' : undefined}
-           aria-label="{dataLunga(d)}{del.length ? `, ${del.length} ${del.length === 1 ? 'evento' : 'eventi'}` : ''}">
+           aria-label="{dataLunga(d)}{del.length ? `, ${del.length === 1 ? t('1 evento') : t('{n} eventi', { n: del.length })}` : ''}">
           <span class="sigla">{giornoBreve(d).toUpperCase()}</span>
           <span class="numero">{d.getDate()}</span>
           <span class="punti">{#each del.slice(0, 3) as e (e.id)}<i style:background={colore(app.meta, e.tag_id)}></i>{/each}</span>
@@ -58,12 +59,12 @@
 
   <Sblocco />
 
-  <section aria-label="Oggi" class="lista">
-    <h2 class="dato occhiello"><span>Oggi</span><span>{diOggi.length}</span></h2>
+  <section aria-label={t('Oggi')} class="lista">
+    <h2 class="dato occhiello"><span>{t('Oggi')}</span><span>{diOggi.length}</span></h2>
     {#each diOggi as e (e.id)}
       <RigaEvento evento={e} />
     {:else}
-      <p class="vuoto">Giornata libera. Nessun evento.</p>
+      <p class="vuoto">{t('Giornata libera. Nessun evento.')}</p>
     {/each}
   </section>
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Avatar from '../ui/Avatar.svelte';
   import Foglio from '../ui/Foglio.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -22,9 +23,9 @@
     leggiProfilo().then((p) => (profilo = p));
   });
   const compleanno = $derived(
-    profilo === null ? 'Bloccato' : profilo.compleanno ? `${daChiave(profilo.compleanno).getDate()} ${mese(daChiave(profilo.compleanno))}` : 'Non indicato',
+    profilo === null ? t('Bloccato') : profilo.compleanno ? `${daChiave(profilo.compleanno).getDate()} ${mese(daChiave(profilo.compleanno))}` : t('Non indicato'),
   );
-  const nomeTema = $derived(app.preferenze.modo === 'sistema' ? 'Sistema' : app.preferenze.modo === 'chiaro' ? 'Chiaro' : 'Scuro');
+  const nomeTema = $derived(app.preferenze.modo === 'sistema' ? t('Sistema') : app.preferenze.modo === 'chiaro' ? t('Chiaro') : t('Scuro'));
   const pluginAttivi = $derived(app.meta?.plugins.grafico.user && app.meta.plugins.grafico.instance ? 1 : 0);
 
   let foglio = $state<'' | 'modifica' | 'privacy'>('');
@@ -43,7 +44,7 @@
     try {
       // Se il profilo cifrato non è leggibile, si cambia solo il nome e il resto non viene toccato.
       await salvaProfilo({ first_name: nome, last_name: cognome }, profilo === null || !app.sbloccato ? null : { ...profilo, compleanno: data || undefined });
-      foglio = ''; avvisa('Profilo aggiornato.');
+      foglio = ''; avvisa(t('Profilo aggiornato.'));
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
   }
   // --- Foto ---
@@ -54,30 +55,30 @@
     input.value = '';
     if (!file) return;
     caricando = true;
-    try { await api.salvaFoto(await riduciFoto(file)); await sincronizza(); avvisa('Foto aggiornata.'); }
+    try { await api.salvaFoto(await riduciFoto(file)); await sincronizza(); avvisa(t('Foto aggiornata.')); }
     catch (e) { avvisa(messaggio(e)); } finally { caricando = false; }
   }
   async function togliFoto() {
-    try { await api.togliFoto(); await sincronizza(); avvisa('Foto tolta.'); }
+    try { await api.togliFoto(); await sincronizza(); avvisa(t('Foto tolta.')); }
     catch (e) { avvisa(messaggio(e)); }
   }
   async function esciAltrove() {
-    try { await api.esciAltrove(); await sincronizza(); avvisa('Gli altri dispositivi sono stati disconnessi.'); }
+    try { await api.esciAltrove(); await sincronizza(); avvisa(t('Gli altri dispositivi sono stati disconnessi.')); }
     catch (e) { avvisa(messaggio(e)); }
   }
 </script>
 
 <div class="schermata con-menu profilo">
   <div class="testa">
-    <span class="dato">Profilo</span>
-    <button type="button" class="collegamento" disabled={!app.online} onclick={apriModifica}>Modifica</button>
+    <span class="dato">{t('Profilo')}</span>
+    <button type="button" class="collegamento" disabled={!app.online} onclick={apriModifica}>{t('Modifica')}</button>
   </div>
 
   <section class="identita">
     <div class="foto">
       <Avatar nome={utente.display_name} persona={utente.id} size={108} />
       <label class="scatta" class:ferma={!app.online || caricando}>
-        <Icona nome="camera" size={18} spessore={1.6} /><span class="nascosto">Cambia foto profilo</span>
+        <Icona nome="camera" size={18} spessore={1.6} /><span class="nascosto">{t('Cambia foto profilo')}</span>
         <input class="nascosto" type="file" accept="image/*" disabled={!app.online || caricando} onchange={cambiaFoto} />
       </label>
     </div>
@@ -85,82 +86,82 @@
       <h1>{utente.display_name}</h1>
       <div>
         <span class="ruolo">{NOMI_RUOLO[utente.role].toUpperCase()}</span>
-        {#if classe}<span>Classe {classe}</span>{/if}
+        {#if classe}<span>{t('Classe {nome}', { nome: classe })}</span>{/if}
       </div>
     </div>
   </section>
 
   <dl class="scheda-dati">
-    <dt>Foto</dt><dd>{#if utente.photo}{admin ? 'Caricata' : 'La vedono i compagni'}<button type="button" class="sblocca" disabled={!app.online} onclick={togliFoto}>Togli</button>{:else}<span class="tenue">{caricando ? 'Carico…' : 'Nessuna'}</span>{/if}</dd>
+    <dt>{t('Foto')}</dt><dd>{#if utente.photo}{admin ? t('Caricata') : t('La vedono i compagni')}<button type="button" class="sblocca" disabled={!app.online} onclick={togliFoto}>{t('Togli')}</button>{:else}<span class="tenue">{caricando ? t('Carico…') : t('Nessuna')}</span>{/if}</dd>
     {#if admin}
-      <dt>Compito</dt><dd>Gestione del server. Non fa parte della classe.</dd>
+      <dt>{t('Compito')}</dt><dd>{t('Gestione del server. Non fa parte della classe.')}</dd>
     {:else}
-      <dt>Gruppi</dt><dd class:tenue={!mieiGruppi.length}>{mieiGruppi.map((g) => g.name).join(' · ') || 'Nessuno'}</dd>
-      <dt>Compleanno</dt>
+      <dt>{t('Gruppi')}</dt><dd class:tenue={!mieiGruppi.length}>{mieiGruppi.map((g) => g.name).join(' · ') || t('Nessuno')}</dd>
+      <dt>{t('Compleanno')}</dt>
       <dd class:tenue={!profilo?.compleanno}>
-        {compleanno}{#if profilo === null}<button type="button" class="sblocca" onclick={() => (sblocco = true)}>Sblocca</button>{/if}
+        {compleanno}{#if profilo === null}<button type="button" class="sblocca" onclick={() => (sblocco = true)}>{t('Sblocca')}</button>{/if}
       </dd>
     {/if}
   </dl>
 
-  <nav aria-label="Impostazioni">
+  <nav aria-label={t('Impostazioni')}>
     {#snippet riga(href: string, titolo: string, valore: string)}
       <a {href}><span class="serif">{titolo}</span><span class="valore">{valore}<Icona nome="destra" size={16} /></span></a>
     {/snippet}
-    {@render riga('#/aspetto', 'Aspetto e tema', nomeTema)}
-    {#if !admin}{@render riga('#/aspetto', 'Notifiche', 'In arrivo')}{/if}
-    {#if !admin && classe}{@render riga('#/classe', 'La mia classe', `${mieiGruppi.find((g) => g.kind === 'classe')!.members.length} persone`)}{/if}
+    {@render riga('#/aspetto', t('Aspetto e tema'), nomeTema)}
+    {#if !admin}{@render riga('#/aspetto', t('Notifiche'), t('In arrivo'))}{/if}
+    {#if !admin && classe}{@render riga('#/classe', t('La mia classe'), t('{n} persone', { n: mieiGruppi.find((g) => g.kind === 'classe')!.members.length }))}{/if}
     {#if !admin && (utente.role === 'rappresentante' || gruppiDiLavoro(app.meta).length)}
-      {@render riga('#/lavori', 'Gruppi di lavoro', lavoriAperti ? `${lavoriAperti} ${lavoriAperti === 1 ? 'aperto' : 'aperti'}` : 'Nessuno aperto')}
+      {@render riga('#/lavori', t('Gruppi di lavoro'), lavoriAperti ? lavoriAperti === 1 ? t('1 aperto') : t('{n} aperti', { n: lavoriAperti }) : t('Nessuno aperto'))}
     {/if}
-    {@render riga('#/plugin', 'Plugin', pluginAttivi ? '1 attivo' : 'Nessuno attivo')}
+    {@render riga('#/plugin', t('Plugin'), pluginAttivi ? t('1 attivo') : t('Nessuno attivo'))}
     {#if admin}
-      {@render riga('#/persone', 'Persone e gruppi', app.meta?.pending ? `${app.meta.pending} in attesa` : 'Admin')}
-      {@render riga('#/backup', 'Backup', 'Admin')}
+      {@render riga('#/persone', t('Persone e gruppi'), app.meta?.pending ? t('{n} in attesa', { n: app.meta.pending }) : t('Admin'))}
+      {@render riga('#/backup', t('Backup'), t('Admin'))}
     {:else if utente.role === 'rappresentante'}
-      {@render riga('#/persone', 'Gestione classe', app.meta?.pending ? `${app.meta.pending} in attesa` : 'Inviti e gruppi')}
+      {@render riga('#/persone', t('Gestione classe'), app.meta?.pending ? t('{n} in attesa', { n: app.meta.pending }) : t('Inviti e gruppi'))}
     {/if}
     <button type="button" class="voce-menu" onclick={() => (foglio = 'privacy')}>
-      <span class="serif">Privacy e sicurezza</span>
-      <span class="valore">{utente.sessions} {utente.sessions === 1 ? 'dispositivo' : 'dispositivi'}<Icona nome="destra" size={16} /></span>
+      <span class="serif">{t('Privacy e sicurezza')}</span>
+      <span class="valore">{utente.sessions === 1 ? t('1 dispositivo') : t('{n} dispositivi', { n: utente.sessions })}<Icona nome="destra" size={16} /></span>
     </button>
-    <button type="button" class="voce-menu esci" onclick={esci}><span class="serif">Esci</span></button>
+    <button type="button" class="voce-menu esci" onclick={esci}><span class="serif">{t('Esci')}</span></button>
   </nav>
 
   <p class="piede">TaskHit · {location.host}<br />
-    Ultima sincronizzazione: {app.ultimaSync ? momento(app.ultimaSync / 1000) : 'mai'} · {app.online ? 'dati disponibili offline' : 'sei offline'}</p>
+    {t('Ultima sincronizzazione: {quando}', { quando: app.ultimaSync ? momento(app.ultimaSync / 1000) : t('mai') })} · {app.online ? t('dati disponibili offline') : t('sei offline')}</p>
 </div>
 
 <Sblocco bind:aperto={sblocco} riga={false} />
 
 {#if foglio === 'modifica'}
-  <Foglio titolo="Modifica profilo" onclose={() => (foglio = '')}>
+  <Foglio titolo={t('Modifica profilo')} onclose={() => (foglio = '')}>
     <form onsubmit={salva}>
-      <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
-      <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
-        <span class="nota">Se li cambi, entrerai con quelli nuovi.</span></label>
+      <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+      <label class="campo"><span class="dato">{t('Cognome')}</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
+        <span class="nota">{t('Se li cambi, entrerai con quelli nuovi.')}</span></label>
       {#if !admin}
         {#if app.sbloccato && profilo !== null}
-          <label class="campo"><span class="dato">Compleanno · cifrato</span><input type="date" bind:value={data} /></label>
+          <label class="campo"><span class="dato">{t('Compleanno · cifrato')}</span><input type="date" bind:value={data} /></label>
         {:else}
-          <p class="nota">Il compleanno è cifrato: <button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>sblocca</button> per modificarlo.</p>
+          <p class="nota">{t('Il compleanno è cifrato:')} <button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>{t('sblocca')}</button> {t('per modificarlo.')}</p>
         {/if}
       {/if}
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
-      <button class="pulsante pieno grande" disabled={occupato} aria-busy={occupato}>Salva</button>
+      <button class="pulsante pieno grande" disabled={occupato} aria-busy={occupato}>{t('Salva')}</button>
     </form>
   </Foglio>
 {:else if foglio === 'privacy'}
-  <Foglio titolo="Privacy e sicurezza" onclose={() => (foglio = '')}>
+  <Foglio titolo={t('Privacy e sicurezza')} onclose={() => (foglio = '')}>
     <dl class="scheda-dati">
       {#if !admin}
-        <dt>Privati</dt><dd>Cifrati sul dispositivo: il server non li legge.</dd>
-        <dt>Stato</dt><dd>{app.sbloccato ? 'Sbloccati in questa sessione' : 'Bloccati'}{#if !app.sbloccato}<button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>Sblocca</button>{/if}</dd>
+        <dt>{t('Privati')}</dt><dd>{t('Cifrati sul dispositivo: il server non li legge.')}</dd>
+        <dt>{t('Stato')}</dt><dd>{app.sbloccato ? t('Sbloccati in questa sessione') : t('Bloccati')}{#if !app.sbloccato}<button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>{t('Sblocca')}</button>{/if}</dd>
       {/if}
-      <dt>Accessi</dt><dd>{utente.sessions} {utente.sessions === 1 ? 'dispositivo collegato' : 'dispositivi collegati'}</dd>
+      <dt>{t('Accessi')}</dt><dd>{utente.sessions === 1 ? t('1 dispositivo collegato') : t('{n} dispositivi collegati', { n: utente.sessions })}</dd>
     </dl>
-    <button type="button" class="pulsante grande" disabled={utente.sessions < 2 || !app.online} onclick={esciAltrove}>Esci dagli altri dispositivi</button>
-    <p class="nota">Il cambio password arriva in una prossima versione.</p>
+    <button type="button" class="pulsante grande" disabled={utente.sessions < 2 || !app.online} onclick={esciAltrove}>{t('Esci dagli altri dispositivi')}</button>
+    <p class="nota">{t('Il cambio password arriva in una prossima versione.')}</p>
   </Foglio>
 {/if}
 

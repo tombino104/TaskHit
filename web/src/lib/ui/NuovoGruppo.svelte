@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Foglio from './Foglio.svelte';
   import { api, type Gruppo } from '../api';
   import { app, messaggio, sincronizza } from '../store.svelte';
@@ -25,23 +26,23 @@
   }
 </script>
 
-<Foglio titolo="Nuovo gruppo" {onclose}>
+<Foglio titolo={t('Nuovo gruppo')} {onclose}>
   <form onsubmit={crea}>
-    <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" placeholder={admin ? 'es. 4ªB' : 'es. 4ªB laboratorio'} /></label>
+    <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nome} required maxlength="40" placeholder={admin ? t('es. 4ªB') : t('es. 4ªB laboratorio')} /></label>
     {#if admin}
-      <div role="radiogroup" aria-label="Tipo" class="segmenti">
-        <button type="button" role="radio" aria-checked={tipo === 'classe'} onclick={() => (tipo = 'classe')}>Classe</button>
-        <button type="button" role="radio" aria-checked={tipo === 'gruppo'} onclick={() => (tipo = 'gruppo')}>Gruppo</button>
+      <div role="radiogroup" aria-label={t('Tipo')} class="segmenti">
+        <button type="button" role="radio" aria-checked={tipo === 'classe'} onclick={() => (tipo = 'classe')}>{t('Classe')}</button>
+        <button type="button" role="radio" aria-checked={tipo === 'gruppo'} onclick={() => (tipo = 'gruppo')}>{t('Gruppo')}</button>
       </div>
     {:else if classi.length > 1}
-      <label class="campo"><span class="dato">Classe</span>
+      <label class="campo"><span class="dato">{t('Classe')}</span>
         <select value={classe} onchange={(e) => (scelta = e.currentTarget.value)}>{#each classi as c (c.id)}<option value={c.id}>{c.name}</option>{/each}</select>
       </label>
     {:else}
-      <p class="nota">{classi[0] ? `Il gruppo nasce dentro ${classi[0].name}.` : 'Serve far parte di una classe.'}</p>
+      <p class="nota">{classi[0] ? t('Il gruppo nasce dentro {classe}.', { classe: classi[0].name }) : t('Serve far parte di una classe.')}</p>
     {/if}
     {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
-    <button class="pulsante pieno grande" disabled={occupato || (!admin && !classe)} aria-busy={occupato}>Crea</button>
+    <button class="pulsante pieno grande" disabled={occupato || (!admin && !classe)} aria-busy={occupato}>{t('Crea')}</button>
   </form>
 </Foglio>
 

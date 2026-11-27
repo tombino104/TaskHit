@@ -1,4 +1,5 @@
 // Client HTTP minimo. Il cookie di sessione è HttpOnly: da qui non si legge e non serve.
+import { t } from './i18n';
 export class ApiError extends Error {
   constructor(public status: number, message: string, public retryAfter?: number, public blocco?: Blocco) { super(message); }
 }
@@ -15,12 +16,12 @@ async function call<T>(method: string, path: string, body?: unknown, keepalive =
       body: body === undefined || body instanceof Blob ? body : JSON.stringify(body),
     });
   } catch {
-    throw new ApiError(0, 'Server non raggiungibile.');
+    throw new ApiError(0, t('Server non raggiungibile.'));
   }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const retry = Number(res.headers.get('retry-after')) || undefined;
-    throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, retry, data?.blocked);
+    throw new ApiError(res.status, data?.error ?? t('Errore {n}', { n: res.status }), retry, data?.blocked);
   }
   return data as T;
 }

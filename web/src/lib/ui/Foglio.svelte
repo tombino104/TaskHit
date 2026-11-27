@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Pannello che sale dal basso (centrato su schermi larghi). Usa <dialog>: fuoco e tasto Esc li gestisce il browser.
   import type { Snippet } from 'svelte';
   let { titolo, onclose, azione, children }: { titolo: string; onclose: () => void; azione?: Snippet; children: Snippet } = $props();
@@ -17,7 +18,7 @@
     <span class="maniglia" aria-hidden="true"></span>
     <div class="testa">
       <h2 {id}>{titolo}</h2>
-      {#if azione}{@render azione()}{:else}<button type="button" class="collegamento" onclick={onclose}>Chiudi</button>{/if}
+      {#if azione}{@render azione()}{:else}<button type="button" class="collegamento" onclick={onclose}>{t('Chiudi')}</button>{/if}
     </div>
     {@render children()}
   </div>

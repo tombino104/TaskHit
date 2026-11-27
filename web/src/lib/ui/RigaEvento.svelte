@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   import Icona from './Icona.svelte';
   import { app } from '../store.svelte';
   import { colore, etichettaGruppo, gruppoDi, materiaDi, nomeTipo, riassunto, type Evento } from '../events';
@@ -27,8 +28,8 @@
     {#if !compatta}
       <span class="chi">
         <Icona nome={evento.privato ? 'lucchetto' : 'globo'} size={14} />
-        {evento.privato ? 'Privato · Solo tu' : `Pubblico · ${etichettaGruppo(gruppoDi(app.meta, evento.group_id))}`}
-        {#if evento.proposed}· modifica in attesa{/if}
+        {evento.privato ? t('Privato · Solo tu') : `${t('Pubblico')} · ${etichettaGruppo(gruppoDi(app.meta, evento.group_id))}`}
+        {#if evento.proposed}{t('· modifica in attesa')}{/if}
       </span>
     {/if}
   </span>

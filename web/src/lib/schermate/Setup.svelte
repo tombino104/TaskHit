@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Prima configurazione in quattro passi. Il primo crea l'admin; gli altri si possono rivedere in seguito.
   import ChiaveRecupero from '../ui/ChiaveRecupero.svelte';
   import Icona from '../ui/Icona.svelte';
@@ -33,15 +34,15 @@
   let nuovoGruppo = $state(false);
 
   const PASSI = [
-    ['Crea l’account admin', 'L’admin gestisce solo la parte tecnica: utenti, gruppi, plugin e backup. Non fa parte della classe.'],
-    ['Dai un nome alla tua istanza', 'Niente è scritto nel codice: tutto quello che imposti qui si può cambiare dopo.'],
-    ['Classi e gruppi', 'Le classi le crei tu; i rappresentanti potranno aggiungere gruppi al loro interno. Gli eventi pubblici arrivano a chi fa parte del gruppo.'],
-    ['Sicurezza e backup', 'Lo stato reale di questo server. Le impostazioni di sicurezza stanno in config.toml.'],
+    [t('Crea l’account admin'), t('L’admin gestisce solo la parte tecnica: utenti, gruppi, plugin e backup. Non fa parte della classe.')],
+    [t('Dai un nome alla tua istanza'), t('Niente è scritto nel codice: tutto quello che imposti qui si può cambiare dopo.')],
+    [t('Classi e gruppi'), t('Le classi le crei tu; i rappresentanti potranno aggiungere gruppi al loro interno. Gli eventi pubblici arrivano a chi fa parte del gruppo.')],
+    [t('Sicurezza e backup'), t('Lo stato reale di questo server. Le impostazioni di sicurezza stanno in config.toml.')],
   ] as const;
 
   async function creaAdmin() {
-    if (password.length < 10) throw new Error('La password deve avere almeno 10 caratteri.');
-    if (password !== password2) throw new Error('Le password non coincidono.');
+    if (password.length < 10) throw new Error(t('La password deve avere almeno 10 caratteri.'));
+    if (password !== password2) throw new Error(t('Le password non coincidono.'));
     const k = await preparaChiavi(password, kdf ?? undefined);
     const res = await api.setup({ first_name: nome, last_name: cognome, ...k.account });
     await usaChiave(k.dek, { username: res.user.username, kdf_salt: k.kdf_salt, kdf: kdf!, wrapped_key: k.account.wrapped_key });
@@ -88,7 +89,7 @@
 
   async function copia(code: string) {
     const link = linkInvito(indirizzo.trim(), code);
-    try { await navigator.clipboard.writeText(link); avvisa('Link copiato.'); } catch { avvisa(link); }
+    try { await navigator.clipboard.writeText(link); avvisa(t('Link copiato.')); } catch { avvisa(link); }
   }
 
 </script>
@@ -100,12 +101,12 @@
     <div class="schermata setup">
       <div class="testa">
         <span class="marchio">TaskHit</span>
-        <span class="dato">Prima configurazione</span>
+        <span class="dato">{t('Prima configurazione')}</span>
       </div>
 
       <div class="avanzamento">
         <div aria-hidden="true">{#each [1, 2, 3, 4] as i (i)}<i class:fatto={i <= passo}></i>{/each}</div>
-        <span class="dato">Passo {passo} di 4</span>
+        <span class="dato">{t('Passo {n} di 4', { n: passo })}</span>
       </div>
 
       <header>
@@ -115,18 +116,18 @@
 
       <form id="passo" onsubmit={avanti}>
         {#if passo === 1}
-          <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
-          <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
-            <span class="nota">Entrerai con nome, cognome e password. Se sei anche in classe, l’account admin deve avere un nome diverso da quello da alunno.</span></label>
-          <label class="campo"><span class="dato">Password</span><input type="password" bind:value={password} required autocomplete="new-password" placeholder="Almeno 10 caratteri" />
-            <span class="nota">Non lascia mai questo dispositivo. Nemmeno chi gestisce il server può leggerla.</span></label>
-          <label class="campo"><span class="dato">Ripeti password</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>
+          <label class="campo"><span class="dato">{t('Nome')}</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+          <label class="campo"><span class="dato">{t('Cognome')}</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
+            <span class="nota">{t('Entrerai con nome, cognome e password. Se sei anche in classe, l’account admin deve avere un nome diverso da quello da alunno.')}</span></label>
+          <label class="campo"><span class="dato">{t('Password')}</span><input type="password" bind:value={password} required autocomplete="new-password" placeholder={t('Almeno 10 caratteri')} />
+            <span class="nota">{t('Non lascia mai questo dispositivo. Nemmeno chi gestisce il server può leggerla.')}</span></label>
+          <label class="campo"><span class="dato">{t('Ripeti password')}</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>
         {:else if passo === 2}
-          <label class="campo"><span class="dato">Nome istanza</span><input bind:value={istanza} maxlength="200" /></label>
-          <label class="campo"><span class="dato">Indirizzo pubblico</span><input class="mono" type="url" bind:value={indirizzo} maxlength="200" placeholder="https://" />
-            <span class="nota">L’indirizzo del tunnel Cloudflare, usato nei link di invito.</span></label>
-          <label class="campo"><span class="dato">Anno scolastico</span><input class="mono" bind:value={annoScolastico} maxlength="200" /></label>
-          <label class="campo"><span class="dato">Fuso orario</span><input class="mono" bind:value={fuso} maxlength="200" /></label>
+          <label class="campo"><span class="dato">{t('Nome istanza')}</span><input bind:value={istanza} maxlength="200" /></label>
+          <label class="campo"><span class="dato">{t('Indirizzo pubblico')}</span><input class="mono" type="url" bind:value={indirizzo} maxlength="200" placeholder="https://" />
+            <span class="nota">{t('L’indirizzo del tunnel Cloudflare, usato nei link di invito.')}</span></label>
+          <label class="campo"><span class="dato">{t('Anno scolastico')}</span><input class="mono" bind:value={annoScolastico} maxlength="200" /></label>
+          <label class="campo"><span class="dato">{t('Fuso orario')}</span><input class="mono" bind:value={fuso} maxlength="200" /></label>
         {:else if passo === 3}
           <div>
             <ul class="elenco">
@@ -134,27 +135,27 @@
                 <li><span class="serif grande">{g.name}</span><span class="dato tenue">{g.kind}</span></li>
               {/each}
             </ul>
-            <button type="button" class="pulsante tratteggiato aggiungi" onclick={() => (nuovoGruppo = true)}>+ Aggiungi classe o gruppo</button>
-            <p class="nota dopo">Gli eventi li gestiscono i rappresentanti: quando i compagni sono entrati, assegna il ruolo in Persone. Se sei anche tu in classe, crea un secondo account con il codice invito.</p>
+            <button type="button" class="pulsante tratteggiato aggiungi" onclick={() => (nuovoGruppo = true)}>{t('+ Aggiungi classe o gruppo')}</button>
+            <p class="nota dopo">{t('Gli eventi li gestiscono i rappresentanti: quando i compagni sono entrati, assegna il ruolo in Persone. Se sei anche tu in classe, crea un secondo account con il codice invito.')}</p>
             {#each inviti as i (i.id)}
               <div class="riquadro">
-                <span class="dato">Codice invito {app.meta?.groups.find((g) => g.id === i.group_id)?.name}</span>
-                <span class="codice"><span>{codiceLeggibile(i.code)}</span><button type="button" class="collegamento" onclick={() => copia(i.code)}>Copia</button></span>
-                <span class="nota">Scade tra 7 giorni. Chi entra con il codice è Alunno e lo confermi tu; i ruoli li cambi dopo.</span>
+                <span class="dato">{t('Codice invito')} {app.meta?.groups.find((g) => g.id === i.group_id)?.name}</span>
+                <span class="codice"><span>{codiceLeggibile(i.code)}</span><button type="button" class="collegamento" onclick={() => copia(i.code)}>{t('Copia')}</button></span>
+                <span class="nota">{t('Scade tra 7 giorni. Chi entra con il codice è Alunno e lo confermi tu; i ruoli li cambi dopo.')}</span>
               </div>
             {/each}
           </div>
         {:else if stato}
           <div>
-            <Interruttore nome="Dati cifrati sul disco" descrizione={stato.encrypted_at_rest ? 'Il database è cifrato con SQLCipher' : 'Questa build non cifra il database; gli eventi privati restano cifrati'} attivo={stato.encrypted_at_rest} disabilitato />
-            <Interruttore nome="Protezione da abusi" descrizione="Al massimo {stato.login_attempts_per_minute} tentativi di accesso al minuto per utente" attivo disabilitato />
-            <Interruttore nome="Origine bloccata sul tunnel" descrizione={stato.origin_pinned ? 'Le modifiche arrivano solo dall’indirizzo pubblico' : 'Imposta TASKHIT_PUBLIC_URL per attivarla'} attivo={stato.origin_pinned} disabilitato />
-            <div class="backup"><span class="voce"><span>Backup automatici</span><span class="nota">Attivi: ogni notte alle 03:00, conservando gli ultimi 14. Li cambi in Profilo, Backup.</span></span></div>
+            <Interruttore nome={t('Dati cifrati sul disco')} descrizione={stato.encrypted_at_rest ? t('Il database è cifrato con SQLCipher') : t('Questa build non cifra il database; gli eventi privati restano cifrati')} attivo={stato.encrypted_at_rest} disabilitato />
+            <Interruttore nome={t('Protezione da abusi')} descrizione={t('Al massimo {n} tentativi di accesso al minuto per utente', { n: stato.login_attempts_per_minute })} attivo disabilitato />
+            <Interruttore nome={t('Origine bloccata sul tunnel')} descrizione={stato.origin_pinned ? t('Le modifiche arrivano solo dall’indirizzo pubblico') : t('Imposta TASKHIT_PUBLIC_URL per attivarla')} attivo={stato.origin_pinned} disabilitato />
+            <div class="backup"><span class="voce"><span>{t('Backup automatici')}</span><span class="nota">{t('Attivi: ogni notte alle 03:00, conservando gli ultimi 14. Li cambi in Profilo, Backup.')}</span></span></div>
           </div>
         {/if}
         {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
         {#if passo === 1}
-          <label class="collegamento ripristino">Hai un backup? Ripristinalo
+          <label class="collegamento ripristino">{t('Hai un backup? Ripristinalo')}
             <input class="nascosto" type="file" accept=".tar,application/x-tar" disabled={occupato} onchange={daBackup} />
           </label>
         {/if}
@@ -164,11 +165,11 @@
     <footer>
       <div>
         <!-- Dopo la creazione dell'admin non si torna al primo passo. -->
-        <button type="button" class="indietro" disabled={passo <= 2 || occupato} onclick={() => { errore = ''; passo--; }}>Indietro</button>
+        <button type="button" class="indietro" disabled={passo <= 2 || occupato} onclick={() => { errore = ''; passo--; }}>{t('Indietro')}</button>
         <button form="passo" class="pulsante grande {passo === 4 ? 'accento' : 'pieno'}" disabled={occupato} aria-busy={occupato}>
-          {#if occupato}{passo === 1 ? 'Derivo le chiavi…' : 'Attendi…'}
-          {:else if passo === 4}Apri TaskHit
-          {:else}Continua<Icona nome="avanti" size={18} spessore={1.6} />{/if}
+          {#if occupato}{passo === 1 ? t('Derivo le chiavi…') : t('Attendi…')}
+          {:else if passo === 4}{t('Apri TaskHit')}
+          {:else}{t('Continua')}<Icona nome="avanti" size={18} spessore={1.6} />{/if}
         </button>
       </div>
     </footer>

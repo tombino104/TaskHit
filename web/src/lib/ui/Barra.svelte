@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Colonna laterale su schermi larghi: sezioni, materie visibili e utente.
   import Avatar from './Avatar.svelte';
   import { app } from '../store.svelte';
@@ -9,22 +10,22 @@
   const admin = $derived(app.utente?.role === 'admin');
   const sezioni = $derived((admin
     ? [
-        { id: 'persone', nome: 'Persone', pallino: app.meta?.pending },
-        { id: 'backup', nome: 'Backup' },
-        { id: 'plugin', nome: 'Plugin' },
-        { id: 'profilo', nome: 'Profilo' },
-        { id: 'aspetto', nome: 'Impostazioni' },
+        { id: 'persone', nome: t('Persone'), pallino: app.meta?.pending },
+        { id: 'backup', nome: t('Backup') },
+        { id: 'plugin', nome: t('Plugin') },
+        { id: 'profilo', nome: t('Profilo') },
+        { id: 'aspetto', nome: t('Impostazioni') },
       ]
     : [
-        { id: 'oggi', nome: 'Oggi' },
-        { id: 'calendario', nome: 'Calendario' },
-        { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
-        ...(app.utente && vedeProposte(app.utente, app.meta) ? [{ id: 'approvazioni', nome: decideProposte(app.utente, app.meta) ? 'Da approvare' : 'Le mie proposte', pallino: app.inbox.to_approve }] : []),
-        ...(app.meta?.groups.some((g) => g.mine && g.kind === 'classe') ? [{ id: 'classe', nome: 'La mia classe' }] : []),
-        ...(app.utente?.role === 'rappresentante' || gruppiDiLavoro(app.meta).length ? [{ id: 'lavori', nome: 'Gruppi di lavoro' }] : []),
-        ...(app.utente?.role === 'rappresentante' ? [{ id: 'persone', nome: 'Gestione classe', pallino: app.meta?.pending }] : []),
-        { id: 'profilo', nome: 'Profilo' },
-        { id: 'aspetto', nome: 'Impostazioni' },
+        { id: 'oggi', nome: t('Oggi') },
+        { id: 'calendario', nome: t('Calendario') },
+        { id: 'inbox', nome: t('Inbox'), pallino: app.inbox.unread },
+        ...(app.utente && vedeProposte(app.utente, app.meta) ? [{ id: 'approvazioni', nome: decideProposte(app.utente, app.meta) ? t('Da approvare') : t('Le mie proposte'), pallino: app.inbox.to_approve }] : []),
+        ...(app.meta?.groups.some((g) => g.mine && g.kind === 'classe') ? [{ id: 'classe', nome: t('La mia classe') }] : []),
+        ...(app.utente?.role === 'rappresentante' || gruppiDiLavoro(app.meta).length ? [{ id: 'lavori', nome: t('Gruppi di lavoro') }] : []),
+        ...(app.utente?.role === 'rappresentante' ? [{ id: 'persone', nome: t('Gestione classe'), pallino: app.meta?.pending }] : []),
+        { id: 'profilo', nome: t('Profilo') },
+        { id: 'aspetto', nome: t('Impostazioni') },
       ]
   ) as { id: string; nome: string; pallino?: number }[]);
 
@@ -42,18 +43,18 @@
 <aside>
   <a href={admin ? '#/persone' : '#/oggi'} class="marchio">TaskHit</a>
 
-  <nav aria-label="Sezioni">
+  <nav aria-label={t('Sezioni')}>
     {#each sezioni as s (s.id)}
       <a href="#/{s.id}" aria-current={rotta.nome === s.id ? 'page' : undefined}>
         {s.nome}
-        {#if s.pallino}<span class="pallino"><span class="nascosto">Da vedere: </span>{s.pallino}</span>{/if}
+        {#if s.pallino}<span class="pallino"><span class="nascosto">{t('Da vedere:')} </span>{s.pallino}</span>{/if}
       </a>
     {/each}
   </nav>
 
   {#if (rotta.nome === 'calendario' || rotta.nome === 'oggi') && app.meta}
     <fieldset>
-      <legend class="dato">Materie</legend>
+      <legend class="dato">{t('Materie')}</legend>
       {#each app.meta.tags as t (t.id)}
         <label>
           <input type="checkbox" checked={visibile(t.id)} onchange={() => commutaMateria(t.id)} />

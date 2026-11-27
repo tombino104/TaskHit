@@ -7,6 +7,9 @@ import '@fontsource/geist-mono/400.css';
 import '@fontsource/geist-mono/500.css';
 import './app.css';
 import { mount } from 'svelte';
-import App from './App.svelte';
+import { preparaLingua } from './lib/i18n';
 
-mount(App, { target: document.getElementById('app')! });
+// L'interfaccia si carica dopo la lingua: così anche i testi preparati all'avvio sono tradotti.
+preparaLingua()
+  .then(() => import('./App.svelte'))
+  .then(({ default: App }) => mount(App, { target: document.getElementById('app')! }));

@@ -15,6 +15,7 @@ pub mod ratelimit;
 pub mod secrets;
 pub mod state;
 pub mod themes;
+pub mod languages;
 pub mod web;
 pub mod work;
 
@@ -48,6 +49,7 @@ pub fn build_state(cfg: Config) -> anyhow::Result<AppState> {
 
     let db = db::Db::open(&cfg.db_path(), db_key.as_ref())?;
     themes::prepare_dir(&cfg.themes_dir())?;
+    std::fs::create_dir_all(cfg.languages_dir())?;
     let dummy_hash = auth::hash_auth_key("taskhit-hash-fittizio")?;
     let sec = &cfg.security;
     Ok(AppState {

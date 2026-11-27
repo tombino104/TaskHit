@@ -278,6 +278,32 @@ fn old_default_themes_are_upgraded_without_losing_edits() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[tokio::test]
+async fn languages_are_listed_and_folder_files_add_or_override() {
+    let (app, dir) = app(|_| {});
+    let (s, _, list) = send(&app, Method::GET, "/api/languages", None, &[]).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(list["languages"], serde_json::json!([{ "id": "en", "nome": "English" }]));
+
+    let folder = dir.join("languages");
+    std::fs::write(folder.join("fr.json"), r#"{ "nome": "Français", "testi": { "Salva": "Enregistrer" } }"#).unwrap();
+    // Un file con la stessa sigla ritocca solo i testi che contiene.
+    std::fs::write(folder.join("en.json"), r#"{ "nome": "English", "testi": { "Salva": "Keep" } }"#).unwrap();
+    std::fs::write(folder.join("de.json"), "non e' json").unwrap();
+    std::fs::write(folder.join("Brutto Nome.json"), r#"{ "nome": "x", "testi": {} }"#).unwrap();
+
+    let (_, _, list) = send(&app, Method::GET, "/api/languages", None, &[]).await;
+    let ids: Vec<_> = list["languages"].as_array().unwrap().iter().map(|l| l["id"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(ids, ["en", "fr"]);
+    assert_eq!(list["invalid"].as_array().unwrap().len(), 2);
+    let (_, _, en) = send(&app, Method::GET, "/api/languages/en", None, &[]).await;
+    assert_eq!((en["testi"]["Salva"].as_str(), en["testi"]["Annulla"].as_str()), (Some("Keep"), Some("Cancel")));
+    let (s, _, _) = send(&app, Method::GET, "/api/languages/de", None, &[]).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _, _) = send(&app, Method::GET, "/api/languages/..%2Fsecrets", None, &[]).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+}
+
 #[test]
 fn contrast_matches_wcag_reference_values() {
     assert!((themes::contrast("#000000", "#FFFFFF").unwrap() - 21.0).abs() < 0.01);
@@ -1075,9 +1101,11 @@ async fn backup_and_restore_bring_data_back() {
     let cookie = admin_cookie(&app).await;
     add_group(&app, &cookie, "Prima").await;
     std::fs::write(dir.join("themes/mio.json"), b"{\"nome\":\"Mio\"}").unwrap();
+    std::fs::write(dir.join("languages/fr.json"), br#"{"nome":"Francais","testi":{}}"#).unwrap();
     let name = backup_now(&app, &cookie).await;
     add_group(&app, &cookie, "Dopo").await;
     std::fs::remove_file(dir.join("themes/mio.json")).unwrap();
+    std::fs::remove_file(dir.join("languages/fr.json")).unwrap();
 
     // Senza la password giusta non si ripristina nulla.
     let uri = format!("/api/backups/{name}/restore");
@@ -1094,6 +1122,7 @@ async fn backup_and_restore_bring_data_back() {
     let tags = group_names(&app, &cookie).await;
     assert!(tags.contains(&"Prima".to_owned()) && !tags.contains(&"Dopo".to_owned()), "{tags:?}");
     assert!(dir.join("themes/mio.json").exists(), "tornano anche i temi");
+    assert!(dir.join("languages/fr.json").exists(), "e le lingue");
     // La copia di sicurezza contiene lo stato di prima del ripristino, e il database resta scrivibile.
     let (_, _, list) = send(&app, Method::GET, "/api/backups", None, &[("cookie", &cookie)]).await;
     assert!(list["items"].as_array().unwrap().iter().any(|i| i["name"] == body["safety"] && i["kind"] == "sicurezza"), "{list}");

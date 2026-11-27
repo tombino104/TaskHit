@@ -400,12 +400,14 @@ fn visible(c: &Connection, user: &AuthUser, id: &str) -> Result<Stored, ApiError
 /// Perche' non si puo' scrivere in un gruppo di cui si fa parte.
 fn refusal(c: &Connection, group_id: &str) -> Result<&'static str, ApiError> {
     Ok(if work::is_work_group(c, group_id)? {
-        "il gruppo di lavoro e' chiuso: si puo' solo consultare"
+        CLOSED
     } else {
-        "il tuo ruolo non permette di modificare gli eventi pubblici"
+        ROLE_REFUSAL
     })
 }
 
+const CLOSED: &str = "il gruppo di lavoro e' chiuso: si puo' solo consultare";
+const ROLE_REFUSAL: &str = "il tuo ruolo non permette di modificare gli eventi pubblici";
 const STALE: &str = "l'evento e' stato modificato nel frattempo: ricarica e riprova";
 
 async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<UpdateReq>) -> Result<Json<Value>, ApiError> {

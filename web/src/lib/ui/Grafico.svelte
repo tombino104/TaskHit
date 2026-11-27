@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Colonne impilate: eventi pubblici (accento) e privati (attenuato) per giorno.
   export interface Colonna { etichetta: string; nome: string; pubblici: number; privati: number; oggi?: boolean }
   let { colonne, periodo, altezza = 180, assi = true, strette = false }: {
@@ -13,7 +14,7 @@
     return Array.from({ length: Math.floor(massimo / passo) + 1 }, (_, i) => i * passo);
   });
   const descrizione = $derived(
-    `Eventi per giorno, ${periodo.toLowerCase()}: ${colonne.filter((c) => c.pubblici + c.privati).map((c) => `${c.nome} ${c.pubblici + c.privati}`).join(', ') || 'nessuno'}`,
+    `${t('Eventi per giorno, {periodo}', { periodo: periodo.toLowerCase() })}: ${colonne.filter((c) => c.pubblici + c.privati).map((c) => `${c.nome} ${c.pubblici + c.privati}`).join(', ') || t('nessuno')}`,
   );
 </script>
 

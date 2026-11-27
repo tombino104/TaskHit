@@ -321,11 +321,12 @@ async fn create(st: &AppState, kind: Kind) -> Result<Item, ApiError> {
             if manifest.encrypted {
                 append(&mut tar, "db.key", &fs::read(cfg.secrets_dir().join("db.key"))?)?;
             }
-            if let Ok(themes) = fs::read_dir(cfg.themes_dir()) {
-                for t in themes.flatten() {
-                    let Ok(file_name) = t.file_name().into_string() else { continue };
-                    if safe_theme_name(&file_name) && t.metadata().is_ok_and(|m| m.is_file() && m.len() <= MAX_THEME_BYTES) {
-                        append(&mut tar, &format!("themes/{file_name}"), &fs::read(t.path())?)?;
+            for (folder, dir, max) in extra_dirs(&cfg) {
+                let Ok(files) = fs::read_dir(dir) else { continue };
+                for f in files.flatten() {
+                    let Ok(file_name) = f.file_name().into_string() else { continue };
+                    if safe_json_name(&file_name) && f.metadata().is_ok_and(|m| m.is_file() && m.len() <= max) {
+                        append(&mut tar, &format!("{folder}/{file_name}"), &fs::read(f.path())?)?;
                     }
                 }
             }
@@ -398,7 +399,12 @@ pub async fn run_due(st: &AppState) -> Result<Option<Item>, ApiError> {
 
 // --- Ripristino ------------------------------------------------------------------------------
 
-fn safe_theme_name(name: &str) -> bool {
+/// Le cartelle di file `.json` che il backup si porta dietro, con la dimensione massima di ciascuno.
+fn extra_dirs(cfg: &Config) -> [(&'static str, PathBuf, u64); 2] {
+    [("themes", cfg.themes_dir(), MAX_THEME_BYTES), ("languages", cfg.languages_dir(), crate::languages::MAX_FILE_BYTES)]
+}
+
+fn safe_json_name(name: &str) -> bool {
     name.len() <= 80
         && name.ends_with(".json")
         && !name.starts_with('.')
@@ -408,7 +414,8 @@ fn safe_theme_name(name: &str) -> bool {
 /// Un archivio controllato e pronto: il database e' gia' aperto e portato allo schema attuale.
 struct Opened {
     source: Connection,
-    themes: Vec<(String, Vec<u8>)>,
+    /// Temi e lingue: cartella di destinazione, nome del file e contenuto.
+    files: Vec<(PathBuf, String, Vec<u8>)>,
     _staging: Staging,
 }
 
@@ -416,7 +423,7 @@ const NOT_A_BACKUP: ApiError = ApiError::BadRequest("il file non e' un backup di
 
 /// Legge solo le voci previste, senza mai estrarre percorsi presi dall'archivio.
 fn open_archive(cfg: &Config, bytes: &[u8]) -> Result<Opened, ApiError> {
-    let (mut manifest, mut database, mut key, mut themes) = (None, None, None, vec![]);
+    let (mut manifest, mut database, mut key, mut files) = (None, None, None, vec![]);
     let mut archive = tar::Archive::new(bytes);
     for entry in archive.entries().map_err(|_| NOT_A_BACKUP)? {
         let mut entry = entry.map_err(|_| NOT_A_BACKUP)?;
@@ -431,9 +438,12 @@ fn open_archive(cfg: &Config, bytes: &[u8]) -> Result<Opened, ApiError> {
             "taskhit.db" => database = Some(data),
             "db.key" => key = Some(data),
             other => {
-                if let Some(name) = other.strip_prefix("themes/").filter(|n| safe_theme_name(n)) {
-                    if data.len() as u64 <= MAX_THEME_BYTES && themes.len() < 200 {
-                        themes.push((name.to_owned(), data));
+                for (folder, dir, max) in extra_dirs(&cfg) {
+                    let name = other.strip_prefix(folder).and_then(|rest| rest.strip_prefix('/')).filter(|n| safe_json_name(n));
+                    if let Some(name) = name {
+                        if data.len() as u64 <= max && files.len() < 200 {
+                            files.push((dir, name.to_owned(), std::mem::take(&mut data)));
+                        }
                     }
                 }
             }
@@ -473,7 +483,7 @@ fn open_archive(cfg: &Config, bytes: &[u8]) -> Result<Opened, ApiError> {
     if admins == 0 {
         return Err(ApiError::BadRequest("il backup non contiene un amministratore: non si puo' ripristinare"));
     }
-    Ok(Opened { source, themes, _staging: staging })
+    Ok(Opened { source, files, _staging: staging })
 }
 
 /// Sostituisce il contenuto del database con quello del backup, in un'unica transazione.
@@ -497,9 +507,9 @@ async fn apply(st: &AppState, opened: Opened, only_if_empty: bool) -> Result<(),
             }
             live.execute("DELETE FROM sessions", [])?;
             live.execute("INSERT INTO audit_log (at, action) VALUES (?1, 'backup_restored')", params![now()])?;
-            fs::create_dir_all(&themes_dir).map_err(ApiError::internal)?;
-            for (name, data) in &opened.themes {
-                fs::write(themes_dir.join(name), data).map_err(ApiError::internal)?;
+            for (dir, name, data) in &opened.files {
+                fs::create_dir_all(dir).map_err(ApiError::internal)?;
+                fs::write(dir.join(name), data).map_err(ApiError::internal)?;
             }
             // Un backup vecchio puo' riportare temi nel formato precedente.
             crate::themes::prepare_dir(&themes_dir).map_err(ApiError::internal)?;

@@ -2,6 +2,7 @@
 //
 // Offline: l'ultima risposta del server è tenuta nel dispositivo, con gli eventi privati ancora cifrati.
 // La chiave dei dati (DEK) resta solo in memoria: dopo un riavvio si «sblocca» di nuovo con la password.
+import { t } from './i18n';
 import { api, ApiError, type Campi, type DatiPubblici, type EventoServer, type Inbox, type Kdf, type Me, type Meta, type Theme } from './api';
 import * as C from './crypto';
 import { SENZA_FILTRI, type Evento, type Filtri } from './events';
@@ -63,8 +64,8 @@ export function avvisa(testo: string): void {
 }
 
 export const messaggio = (e: unknown): string =>
-  e instanceof ApiError && e.status === 429 ? `Troppi tentativi. Riprova tra ${e.retryAfter ?? 60} secondi.`
-  : e instanceof Error ? maiuscolaFrase(e.message) : 'Errore sconosciuto';
+  e instanceof ApiError && e.status === 429 ? t('Troppi tentativi. Riprova tra {n} secondi.', { n: e.retryAfter ?? 60 })
+  : e instanceof Error ? maiuscolaFrase(t(e.message)) : t('Errore sconosciuto');
 const maiuscolaFrase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/e'/g, 'è');
 
 // --- Memoria del dispositivo ---
@@ -181,11 +182,11 @@ export async function sblocca(password: string): Promise<void> {
   if (salvato && salvato.username === utente.username) {
     const { wrapKey } = await C.deriveKeys(password, C.b64.dec(salvato.kdf_salt), salvato.kdf);
     try { await usaChiave(await C.unwrapDek(wrapKey, salvato.wrapped_key)); return; }
-    catch { if (!app.online) throw new Error('Password errata.'); } // forse è cambiata: si chiede al server
+    catch { if (!app.online) throw new Error(t('Password errata.')); } // forse è cambiata: si chiede al server
   }
-  if (!app.online) throw new Error('Per sbloccare la prima volta serve la connessione.');
+  if (!app.online) throw new Error(t('Per sbloccare la prima volta serve la connessione.'));
   try { await accedi(utente.username, password); }
-  catch (e) { throw e instanceof ApiError && e.status === 401 ? new Error('Password errata.') : e; }
+  catch (e) { throw e instanceof ApiError && e.status === 401 ? new Error(t('Password errata.')) : e; }
 }
 
 function blocca(): void { dek = null; app.sbloccato = false; }
@@ -213,7 +214,7 @@ export async function salvaEvento(
 ) {
   let esito;
   if (destinazione.privato) {
-    if (!dek) throw new Error('Sblocca gli eventi privati con la tua password.');
+    if (!dek) throw new Error(t('Sblocca gli eventi privati con la tua password.'));
     const id = esistente?.id ?? [...C.randomBytes(16)].map((b) => b.toString(16).padStart(2, '0')).join('');
     const payload = await C.encryptJson(dek, campi, `event:${id}`);
     esito = esistente ? await api.modifica(id, { rev: esistente.rev, payload }) : await api.creaPrivato(id, payload);

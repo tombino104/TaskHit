@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n';
   // Avviso e pannello per riaprire gli eventi privati: la chiave sta solo in memoria.
   import Foglio from './Foglio.svelte';
   import Icona from './Icona.svelte';
@@ -14,7 +15,7 @@
     errore = ''; occupato = true;
     try {
       await sblocca(password);
-      password = ''; aperto = false; avvisa('Eventi privati sbloccati.');
+      password = ''; aperto = false; avvisa(t('Eventi privati sbloccati.'));
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
   }
 </script>
@@ -22,18 +23,18 @@
 {#if riga && !app.sbloccato && app.bloccati}
   <button type="button" class="riga" onclick={() => (aperto = true)}>
     <Icona nome="lucchetto" size={16} />
-    <span>{app.bloccati === 1 ? 'Un evento privato bloccato' : `${app.bloccati} eventi privati bloccati`}</span>
-    <span class="sblocca">Sblocca</span>
+    <span>{app.bloccati === 1 ? t('Un evento privato bloccato') : t('{n} eventi privati bloccati', { n: app.bloccati })}</span>
+    <span class="sblocca">{t('Sblocca')}</span>
   </button>
 {/if}
 
 {#if aperto}
-  <Foglio titolo="Sblocca" onclose={() => { aperto = false; password = ''; errore = ''; }}>
-    <p class="lede">I tuoi eventi privati sono cifrati. Scrivi la password per leggerli su questo dispositivo: resta aperto finché non chiudi l'app.</p>
+  <Foglio titolo={t('Sblocca')} onclose={() => { aperto = false; password = ''; errore = ''; }}>
+    <p class="lede">{t('I tuoi eventi privati sono cifrati. Scrivi la password per leggerli su questo dispositivo: resta aperto finché non chiudi l\'app.')}</p>
     <form onsubmit={invia}>
-      <label class="campo"><span class="dato">Password</span><input type="password" bind:value={password} required autocomplete="current-password" /></label>
+      <label class="campo"><span class="dato">{t('Password')}</span><input type="password" bind:value={password} required autocomplete="current-password" /></label>
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
-      <button class="pulsante pieno grande" disabled={occupato} aria-busy={occupato}>{occupato ? 'Derivo le chiavi…' : 'Sblocca'}</button>
+      <button class="pulsante pieno grande" disabled={occupato} aria-busy={occupato}>{occupato ? t('Derivo le chiavi…') : t('Sblocca')}</button>
     </form>
   </Foglio>
 {/if}

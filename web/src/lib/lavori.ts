@@ -1,5 +1,6 @@
 // Gruppi di lavoro: diritti per gruppo e composizione sulla lavagna. Il server resta l'unico a decidere:
 // qui si rispecchiano le sue regole per mostrare le azioni giuste.
+import { t } from './i18n';
 import type { Gruppo, Me, Meta } from './api';
 import { puoPubblicare } from './events';
 
@@ -39,7 +40,7 @@ export const prorogaPossibile = (w: { expires_at: number; max_expires_at: number
 // --- La lavagna ---
 export interface Bozza { id?: string; nome: string; membri: string[]; capo: string | null }
 
-export const bozzeVuote = (n: number): Bozza[] => Array.from({ length: n }, (_, i) => ({ nome: `Gruppo ${i + 1}`, membri: [], capo: null }));
+export const bozzeVuote = (n: number): Bozza[] => Array.from({ length: n }, (_, i) => ({ nome: t('Gruppo {n}', { n: i + 1 }), membri: [], capo: null }));
 
 /** Se il capogruppo è uscito, o non c'è, lo diventa il primo del gruppo. */
 const conCapo = (b: Bozza): Bozza => ({ ...b, capo: b.capo && b.membri.includes(b.capo) ? b.capo : (b.membri[0] ?? null) });
@@ -71,11 +72,11 @@ export function aCaso(bozze: Bozza[], persone: string[], caso: () => number = Ma
 
 /** Perché non si può ancora salvare; stringa vuota se va tutto bene. */
 export function problema(bozze: Bozza[]): string {
-  if (!bozze.length) return 'Aggiungi almeno un gruppo.';
-  if (bozze.some((b) => !b.nome.trim())) return 'Dai un nome a ogni gruppo.';
+  if (!bozze.length) return t('Aggiungi almeno un gruppo.');
+  if (bozze.some((b) => !b.nome.trim())) return t('Dai un nome a ogni gruppo.');
   const nomi = bozze.map((b) => b.nome.trim().toLowerCase());
-  if (new Set(nomi).size !== nomi.length) return 'Due gruppi hanno lo stesso nome.';
+  if (new Set(nomi).size !== nomi.length) return t('Due gruppi hanno lo stesso nome.');
   const vuoto = bozze.find((b) => !b.membri.length);
-  if (vuoto) return `«${vuoto.nome}» è vuoto: mettici qualcuno o toglilo.`;
+  if (vuoto) return t('«{nome}» è vuoto: mettici qualcuno o toglilo.', { nome: vuoto.nome });
   return '';
 }
