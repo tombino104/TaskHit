@@ -9,7 +9,7 @@
   const admin = $derived(app.utente?.role === 'admin');
   const sezioni = $derived((admin
     ? [
-        { id: 'persone', nome: 'Persone' },
+        { id: 'persone', nome: 'Persone', pallino: app.meta?.pending },
         { id: 'backup', nome: 'Backup' },
         { id: 'plugin', nome: 'Plugin' },
         { id: 'profilo', nome: 'Profilo' },
@@ -19,13 +19,14 @@
         { id: 'oggi', nome: 'Oggi' },
         { id: 'calendario', nome: 'Calendario' },
         { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
-        ...(app.utente && vedeProposte(app.utente, app.meta) ? [{ id: 'approvazioni', nome: decideProposte(app.utente, app.meta) ? 'Da approvare' : 'Le mie proposte', numero: app.inbox.to_approve }] : []),
+        ...(app.utente && vedeProposte(app.utente, app.meta) ? [{ id: 'approvazioni', nome: decideProposte(app.utente, app.meta) ? 'Da approvare' : 'Le mie proposte', pallino: app.inbox.to_approve }] : []),
+        ...(app.meta?.groups.some((g) => g.mine && g.kind === 'classe') ? [{ id: 'classe', nome: 'La mia classe' }] : []),
         ...(app.utente?.role === 'rappresentante' || gruppiDiLavoro(app.meta).length ? [{ id: 'lavori', nome: 'Gruppi di lavoro' }] : []),
         ...(app.utente?.role === 'rappresentante' ? [{ id: 'persone', nome: 'Gestione classe', pallino: app.meta?.pending }] : []),
         { id: 'profilo', nome: 'Profilo' },
         { id: 'aspetto', nome: 'Impostazioni' },
       ]
-  ) as { id: string; nome: string; pallino?: number; numero?: number }[]);
+  ) as { id: string; nome: string; pallino?: number }[]);
 
   const tutte = $derived(app.meta?.tags.map((t) => t.id) ?? []);
   const visibile = (id: string) => !app.filtri.materie.length || app.filtri.materie.includes(id);
@@ -45,8 +46,7 @@
     {#each sezioni as s (s.id)}
       <a href="#/{s.id}" aria-current={rotta.nome === s.id ? 'page' : undefined}>
         {s.nome}
-        {#if s.pallino}<span class="pallino">{s.pallino}</span>
-        {:else if s.numero}<span class="mono">{s.numero}</span>{/if}
+        {#if s.pallino}<span class="pallino"><span class="nascosto">Da vedere: </span>{s.pallino}</span>{/if}
       </a>
     {/each}
   </nav>
@@ -65,7 +65,7 @@
 
   {#if app.utente}
     <a href="#/profilo" class="utente">
-      <Avatar nome={app.utente.display_name} />
+      <Avatar nome={app.utente.display_name} persona={app.utente.id} />
       <span class="voce">
         <span class="nome">{app.utente.display_name}</span>
         <span class="tenue">{NOMI_RUOLO[app.utente.role]}{gruppo ? ` · ${gruppo}` : ''}</span>
@@ -83,7 +83,6 @@
   nav { display: flex; flex-direction: column; }
   nav a { display: flex; align-items: center; justify-content: space-between; min-height: 40px; color: var(--inchiostro-2); border-bottom: 1px solid var(--filetto); }
   nav a[aria-current='page'] { color: var(--inchiostro); font-weight: 600; border-bottom-color: var(--inchiostro); }
-  nav .mono { font-size: 12px; font-weight: 400; }
   legend { padding: 0 0 8px; }
   label { display: flex; align-items: center; gap: 10px; min-height: 34px; font-size: 14px; cursor: pointer; }
   label input { width: 16px; height: 16px; }

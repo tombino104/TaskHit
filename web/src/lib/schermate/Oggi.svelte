@@ -26,7 +26,7 @@
       <span class="marchio">TaskHit</span>
       <div class="azioni">
         <a href="#/cerca" class="tondo" aria-label="Cerca"><Icona nome="cerca" /></a>
-        <a href="#/profilo" class="profilo" aria-label="Il tuo profilo"><Avatar nome={app.utente?.display_name ?? ''} /></a>
+        <a href="#/profilo" class="profilo" aria-label="Il tuo profilo"><Avatar nome={app.utente?.display_name ?? ''} persona={app.utente?.id} /></a>
       </div>
     </div>
     <div class="dato striscia">

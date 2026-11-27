@@ -44,8 +44,12 @@ export const colore = (meta: Meta | null, tagId: string | null): string => mater
 export function nomeTipo(meta: Meta | null, labelId: string | null, sub: string | null): string {
   const t = tipoDi(meta, labelId);
   if (!t) return 'Evento';
+  if (sub === 'recupero') return `${t.name} di recupero`;
   return sub ? `${t.name} ${sub}` : t.name;
 }
+
+/** "Scritta", "Pratica", "Di recupero". */
+export const nomeModo = (sub: string): string => (sub === 'recupero' ? 'Di recupero' : sub.charAt(0).toUpperCase() + sub.slice(1));
 
 /** "Matematica · Verifica teorica" */
 export function riassunto(meta: Meta | null, e: Pick<Campi, 'tag_id' | 'label_id' | 'sub_kind'>): string {

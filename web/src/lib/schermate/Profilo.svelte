@@ -6,6 +6,7 @@
   import { api } from '../api';
   import { app, avvisa, esci, leggiProfilo, messaggio, salvaProfilo, sincronizza, type Profilo } from '../store.svelte';
   import { NOMI_RUOLO } from '../events';
+  import { riduciFoto } from '../foto';
   import { gruppiDiLavoro } from '../lavori';
   import { daChiave, mese, momento } from '../dates';
 
@@ -29,20 +30,36 @@
   let foglio = $state<'' | 'modifica' | 'privacy'>('');
   let sblocco = $state(false);
   let nome = $state('');
+  let cognome = $state('');
   let data = $state('');
   let errore = $state('');
   let occupato = $state(false);
 
   function apriModifica() {
-    nome = utente.display_name; data = profilo?.compleanno ?? ''; errore = ''; foglio = 'modifica';
+    nome = utente.first_name ?? ''; cognome = utente.last_name ?? ''; data = profilo?.compleanno ?? ''; errore = ''; foglio = 'modifica';
   }
   async function salva(ev: SubmitEvent) {
     ev.preventDefault(); errore = ''; occupato = true;
     try {
       // Se il profilo cifrato non è leggibile, si cambia solo il nome e il resto non viene toccato.
-      await salvaProfilo(nome, profilo === null || !app.sbloccato ? null : { ...profilo, compleanno: data || undefined });
+      await salvaProfilo({ first_name: nome, last_name: cognome }, profilo === null || !app.sbloccato ? null : { ...profilo, compleanno: data || undefined });
       foglio = ''; avvisa('Profilo aggiornato.');
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
+  }
+  // --- Foto ---
+  let caricando = $state(false);
+  async function cambiaFoto(ev: Event) {
+    const input = ev.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    caricando = true;
+    try { await api.salvaFoto(await riduciFoto(file)); await sincronizza(); avvisa('Foto aggiornata.'); }
+    catch (e) { avvisa(messaggio(e)); } finally { caricando = false; }
+  }
+  async function togliFoto() {
+    try { await api.togliFoto(); await sincronizza(); avvisa('Foto tolta.'); }
+    catch (e) { avvisa(messaggio(e)); }
   }
   async function esciAltrove() {
     try { await api.esciAltrove(); await sincronizza(); avvisa('Gli altri dispositivi sono stati disconnessi.'); }
@@ -58,8 +75,11 @@
 
   <section class="identita">
     <div class="foto">
-      <Avatar nome={utente.display_name} size={108} />
-      <button type="button" aria-label="Cambia foto profilo (in arrivo)" title="Foto profilo: in arrivo" disabled><Icona nome="camera" size={18} spessore={1.6} /></button>
+      <Avatar nome={utente.display_name} persona={utente.id} size={108} />
+      <label class="scatta" class:ferma={!app.online || caricando}>
+        <Icona nome="camera" size={18} spessore={1.6} /><span class="nascosto">Cambia foto profilo</span>
+        <input class="nascosto" type="file" accept="image/*" disabled={!app.online || caricando} onchange={cambiaFoto} />
+      </label>
     </div>
     <div class="chi">
       <h1>{utente.display_name}</h1>
@@ -71,7 +91,7 @@
   </section>
 
   <dl class="scheda-dati">
-    <dt>Utente</dt><dd class="mono">{utente.username}</dd>
+    <dt>Foto</dt><dd>{#if utente.photo}{admin ? 'Caricata' : 'La vedono i compagni'}<button type="button" class="sblocca" disabled={!app.online} onclick={togliFoto}>Togli</button>{:else}<span class="tenue">{caricando ? 'Carico…' : 'Nessuna'}</span>{/if}</dd>
     {#if admin}
       <dt>Compito</dt><dd>Gestione del server. Non fa parte della classe.</dd>
     {:else}
@@ -89,12 +109,13 @@
     {/snippet}
     {@render riga('#/aspetto', 'Aspetto e tema', nomeTema)}
     {#if !admin}{@render riga('#/aspetto', 'Notifiche', 'In arrivo')}{/if}
+    {#if !admin && classe}{@render riga('#/classe', 'La mia classe', `${mieiGruppi.find((g) => g.kind === 'classe')!.members.length} persone`)}{/if}
     {#if !admin && (utente.role === 'rappresentante' || gruppiDiLavoro(app.meta).length)}
       {@render riga('#/lavori', 'Gruppi di lavoro', lavoriAperti ? `${lavoriAperti} ${lavoriAperti === 1 ? 'aperto' : 'aperti'}` : 'Nessuno aperto')}
     {/if}
     {@render riga('#/plugin', 'Plugin', pluginAttivi ? '1 attivo' : 'Nessuno attivo')}
     {#if admin}
-      {@render riga('#/persone', 'Persone e gruppi', 'Admin')}
+      {@render riga('#/persone', 'Persone e gruppi', app.meta?.pending ? `${app.meta.pending} in attesa` : 'Admin')}
       {@render riga('#/backup', 'Backup', 'Admin')}
     {:else if utente.role === 'rappresentante'}
       {@render riga('#/persone', 'Gestione classe', app.meta?.pending ? `${app.meta.pending} in attesa` : 'Inviti e gruppi')}
@@ -106,7 +127,7 @@
     <button type="button" class="voce-menu esci" onclick={esci}><span class="serif">Esci</span></button>
   </nav>
 
-  <p class="piede">TaskHit 0.1 · {location.host}<br />
+  <p class="piede">TaskHit · {location.host}<br />
     Ultima sincronizzazione: {app.ultimaSync ? momento(app.ultimaSync / 1000) : 'mai'} · {app.online ? 'dati disponibili offline' : 'sei offline'}</p>
 </div>
 
@@ -115,7 +136,9 @@
 {#if foglio === 'modifica'}
   <Foglio titolo="Modifica profilo" onclose={() => (foglio = '')}>
     <form onsubmit={salva}>
-      <label class="campo"><span class="dato">Nome visualizzato</span><input bind:value={nome} required maxlength="60" autocomplete="name" /></label>
+      <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+      <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
+        <span class="nota">Se li cambi, entrerai con quelli nuovi.</span></label>
       {#if !admin}
         {#if app.sbloccato && profilo !== null}
           <label class="campo"><span class="dato">Compleanno · cifrato</span><input type="date" bind:value={data} /></label>
@@ -147,13 +170,14 @@
   .identita { display: flex; align-items: flex-end; gap: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--inchiostro); }
   .foto { position: relative; flex: none; display: flex; }
   .foto :global(> span) { font-family: var(--font-titoli); font-weight: 400; font-size: 46px !important; }
-  .foto button { position: absolute; right: -4px; bottom: -4px; width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--sfondo); background: var(--inchiostro); color: var(--sfondo); display: flex; align-items: center; justify-content: center; opacity: 1; }
+  .scatta { position: absolute; right: -4px; bottom: -4px; width: 44px; height: 44px; border-radius: 50%; border: 3px solid var(--sfondo); background: var(--inchiostro); color: var(--sfondo); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .scatta.ferma { opacity: .6; cursor: default; }
+  .scatta:focus-within { outline: 2px solid var(--accento); outline-offset: 2px; }
   .chi { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
   /* Nome e cognome su due righe, come in una testata. */
   h1 { width: min-content; max-width: 100%; font-size: 46px; line-height: .9; overflow-wrap: break-word; }
   .chi div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--inchiostro-2); }
   .ruolo { min-height: 24px; padding: 0 8px; display: inline-flex; align-items: center; background: var(--accento); color: var(--su-accento); font-family: var(--font-dati); font-size: 10px; letter-spacing: .08em; }
-  dd.mono { font-size: 14px; }
   .sblocca { margin-left: 8px; font-size: 13px; color: var(--accento); text-decoration: underline; text-underline-offset: 3px; }
   nav { display: flex; flex-direction: column; }
   nav a, .voce-menu { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--filetto); text-align: left; }

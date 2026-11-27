@@ -4,7 +4,9 @@
   import Foglio from '../ui/Foglio.svelte';
   import Icona from '../ui/Icona.svelte';
   import NuovoGruppo from '../ui/NuovoGruppo.svelte';
-  import { api, type InAttesa, type Invito, type Persona, type Ruolo } from '../api';
+  import Moderazione from '../ui/Moderazione.svelte';
+  import { statoBlocco } from '../moderazione';
+  import { api, type InAttesa, type Invito, type Moderato, type Persona, type Ruolo } from '../api';
   import { app, avvisa, messaggio, sincronizza } from '../store.svelte';
   import { commuta, NOMI_RUOLO } from '../events';
   import { daSecondi, mese, quantoFa } from '../dates';
@@ -21,12 +23,15 @@
   let persone = $state<Persona[]>([]);
   let attesa = $state<InAttesa[]>([]);
   let inviti = $state<Invito[]>([]);
+  let moderati = $state<Moderato[]>([]);
+  let daModerare = $state<Moderato | null>(null);
+  const stato = (id: string) => moderati.find((m) => m.id === id);
   let errore = $state('');
 
   async function carica() {
     try {
-      const [p, i] = await Promise.all([api.persone(), api.inviti()]);
-      persone = p.users; attesa = p.pending; inviti = i.invites; errore = '';
+      const [p, i, m] = await Promise.all([api.persone(), api.inviti(), api.moderazione()]);
+      persone = p.users; attesa = p.pending; inviti = i.invites; moderati = m.users; errore = '';
     } catch (e) { errore = messaggio(e); }
   }
   onMount(() => void carica());
@@ -74,9 +79,10 @@
     const p = scelta!;
     if (await esegui(() => api.salvaPersona(p.id, { role: io ? undefined : ruolo, group_ids: ruolo === 'admin' ? undefined : $state.snapshot(suoi) }), 'Salvato.')) scelta = null;
   }
-  async function attiva(si: boolean) {
-    const p = scelta!;
-    if (await esegui(() => api.salvaPersona(p.id, { disabled: !si }), si ? 'Account riattivato.' : 'Account disattivato.')) scelta = null;
+  /** Un admin non compare nell'elenco della moderazione: si può comunque sospendere o riattivare. */
+  function modera(p: Persona) {
+    daModerare = stato(p.id) ?? { id: p.id, name: p.display_name, role: p.role, class_ids: [], photo: null, block: p.disabled ? { kind: 'sospeso', until: null, reason: '', tags: [] } : null, renaming: false, can_moderate: true };
+    scelta = null;
   }
 
   // --- Gruppi e inviti ---
@@ -136,10 +142,10 @@
     <ul class="elenco">
       {#each elenco as p (p.id)}
         <li class:disattivato={p.disabled}>
-          <Avatar nome={p.display_name} tono={p.role === 'admin' ? 'pieno' : p.role === 'rappresentante' ? 'tenue' : 'neutro'} />
+          <Avatar nome={p.display_name} persona={p.id} foto={stato(p.id)?.photo} tono={p.role === 'admin' ? 'pieno' : p.role === 'rappresentante' ? 'tenue' : 'neutro'} />
           <span class="voce chi">
             <span>{p.display_name}</span>
-            <span class="tenue">{p.disabled ? 'Disattivato · ' : ''}{p.role === 'admin' ? 'Gestione del server' : nomiGruppi(p.group_ids)}</span>
+            <span class="tenue">{stato(p.id)?.block ? `${statoBlocco(stato(p.id)!.block!)} · ` : p.disabled ? 'Sospeso · ' : stato(p.id)?.renaming ? 'Deve cambiare nome · ' : ''}{p.role === 'admin' ? 'Gestione del server' : nomiGruppi(p.group_ids)}</span>
           </span>
           <button type="button" class="cambia" aria-label="Cambia ruolo e gruppi di {p.display_name}" onclick={() => apri(p)}>
             {NOMI_RUOLO[p.role].toUpperCase()}<Icona nome="giu" size={14} />
@@ -196,7 +202,7 @@
     <ul class="elenco">
       {#each attesa as p (p.id)}
         <li>
-          <span class="voce chi"><span>{p.display_name} <span class="mono tenue">{p.username}</span></span><span class="tenue">Richiesta {quantoFa(p.created_at, orologio.adesso)} · {gruppi.find((g) => g.id === p.group_id)?.name ?? 'senza gruppo'}</span></span>
+          <span class="voce chi"><span>{p.display_name}</span><span class="tenue">Richiesta {quantoFa(p.created_at, orologio.adesso)} · {gruppi.find((g) => g.id === p.group_id)?.name ?? 'senza gruppo'}</span></span>
           <span class="azioni">
             <button type="button" class="tondo no" aria-label="Rifiuta {p.display_name}" onclick={() => esegui(() => api.rifiuta(p.id), 'Richiesta rifiutata.')}><Icona nome="chiudi" size={16} spessore={1.6} /></button>
             <button type="button" class="tondo si" aria-label="Accetta {p.display_name}" onclick={() => esegui(() => api.accetta(p.id), `${p.display_name} è dentro.`)}><Icona nome="spunta" size={16} spessore={1.8} /></button>
@@ -233,10 +239,12 @@
     {/if}
     <button type="button" class="pulsante pieno grande" onclick={salva}>Salva</button>
     {#if !io}
-      <button type="button" class="pulsante" onclick={() => attiva(scelta!.disabled)}>{scelta.disabled ? 'Riattiva account' : 'Disattiva account'}</button>
+      <button type="button" class="pulsante" onclick={() => modera(scelta!)}>Sospendi, espelli, nome o foto…</button>
     {/if}
   </Foglio>
 {/if}
+
+{#if daModerare}<Moderazione persona={daModerare} onclose={() => (daModerare = null)} onfatto={carica} />{/if}
 
 {#if inModifica}
   <Foglio titolo={inModifica.name} onclose={() => (gruppoScelto = null)}>

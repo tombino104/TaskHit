@@ -1,6 +1,6 @@
 // Client HTTP minimo. Il cookie di sessione è HttpOnly: da qui non si legge e non serve.
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public retryAfter?: number) { super(message); }
+  constructor(public status: number, message: string, public retryAfter?: number, public blocco?: Blocco) { super(message); }
 }
 
 /** `keepalive` fa partire la richiesta anche se la pagina si sta chiudendo. */
@@ -20,14 +20,23 @@ async function call<T>(method: string, path: string, body?: unknown, keepalive =
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const retry = Number(res.headers.get('retry-after')) || undefined;
-    throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, retry);
+    throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, retry, data?.blocked);
   }
   return data as T;
 }
 
 export type Ruolo = 'admin' | 'rappresentante' | 'nerd' | 'alunno';
 export interface User { id: string; username: string; display_name: string; role: Ruolo }
-export interface Me extends User { profile_blob: string | null; sessions: number }
+export interface Me extends User {
+  profile_blob: string | null; sessions: number;
+  /** Vuoti per gli account creati prima di nome e cognome. */
+  first_name: string | null; last_name: string | null;
+  photo: number | null;
+  rename_request: { reason: string; tags: string[] } | null;
+}
+export interface Blocco { kind: 'sospeso' | 'espulso'; until: number | null; reason: string; tags: string[] }
+export type Azione = 'sospendi' | 'espelli' | 'nome' | 'foto' | 'riattiva';
+export interface Moderato { id: string; name: string; role: Ruolo; class_ids: string[]; photo: number | null; block: Blocco | null; renaming: boolean; can_moderate: boolean }
 export interface Kdf { alg: string; m_kib: number; t: number; p: number; len: number }
 export interface SetupStatus { needs_setup: boolean; kdf: Kdf }
 export interface LoginResult { user: User; kdf_salt: string; wrapped_key: string }
@@ -40,13 +49,17 @@ export interface Theme {
   colori: ThemeColors; font?: { titoli?: string; testo?: string; dati?: string };
 }
 export interface NuovoAccount {
-  username: string; display_name: string; auth_key: string; kdf_salt: string;
+  first_name: string; last_name: string; auth_key: string; kdf_salt: string;
   wrapped_key: string; recovery_wrapped_key?: string;
 }
 
 export interface Materia { id: string; name: string; color: string }
-export interface Tipo { id: string; name: string; subs: string[]; personal: boolean }
-export interface Membro { id: string; name: string; role: Ruolo }
+export interface Tipo {
+  id: string; name: string; subs: string[]; personal: boolean;
+  /** Tipi ritirati: servono solo a leggere gli eventi vecchi. */
+  hidden: boolean;
+}
+export interface Membro { id: string; name: string; role: Ruolo; photo: number | null }
 export interface Gruppo {
   id: string; name: string; kind: 'classe' | 'gruppo'; mine: boolean; members: Membro[];
   /** Classe in cui è nato il gruppo. */
@@ -123,7 +136,11 @@ export const api = {
   login: (username: string, auth_key: string) => call<LoginResult>('POST', '/api/auth/login', { username, auth_key }),
   logout: () => call<unknown>('POST', '/api/auth/logout', {}),
   me: () => call<Me>('GET', '/api/me'),
-  salvaMe: (b: { display_name?: string; profile_blob?: string }) => call<Ok>('PATCH', '/api/me', b),
+  salvaMe: (b: { first_name?: string; last_name?: string; profile_blob?: string }) => call<Ok>('PATCH', '/api/me', b),
+  salvaFoto: (data: string) => call<Ok>('PUT', '/api/me/photo', { data }),
+  togliFoto: () => call<Ok>('POST', '/api/me/photo/delete', {}),
+  moderazione: () => call<{ users: Moderato[] }>('GET', '/api/moderation'),
+  sanziona: (userId: string, b: { action: Azione; tags?: string[]; reason?: string; days?: number }) => call<Ok>('POST', `/api/users/${id(userId)}/sanction`, b),
   esciAltrove: () => call<Ok>('POST', '/api/me/sessions/revoke-others', {}),
   themes: () => call<{ themes: Theme[]; invalid: { file: string; error: string }[] }>('GET', '/api/themes'),
 

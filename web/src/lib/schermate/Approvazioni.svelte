@@ -95,7 +95,7 @@
     {@const fatta = scelte[p.id] !== undefined}
     <article class:fatta>
       <div class="autore">
-        <Avatar nome={p.proposer.name} size={32} tono="neutro" />
+        <Avatar nome={p.proposer.name} persona={p.proposer.id} size={32} tono="neutro" />
         <span class="voce">
           <span class="nome">{p.proposer.name} <span class="ruolo">{NOMI_RUOLO[p.proposer.role].toUpperCase()}</span></span>
           <span class="tenue piccolo">{quantoFa(p.created_at, orologio.adesso)}</span>

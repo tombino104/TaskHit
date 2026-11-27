@@ -102,7 +102,7 @@
       {/if}
 
       <div class="autore">
-        <Avatar nome={evento.created_by.name} size={34} />
+        <Avatar nome={evento.created_by.name} persona={evento.created_by.id} size={34} />
         <div>
           <span><strong>{evento.created_by.name}</strong> · {NOMI_RUOLO[evento.created_by.role]} · creato il {momento(evento.created_at).split(',')[0]}</span>
           {#if modificato}

@@ -12,7 +12,7 @@ use crate::{
 use axum::{
     Extension, Json, Router,
     extract::State,
-    http::{HeaderMap, HeaderValue, header::{SET_COOKIE, USER_AGENT}},
+    http::{StatusCode, HeaderMap, HeaderValue, header::{SET_COOKIE, USER_AGENT}},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -39,6 +39,8 @@ pub fn routes() -> Router<AppState> {
         .merge(proposals::routes())
         .merge(people::routes())
         .merge(crate::work::routes())
+        .merge(crate::moderation::routes())
+        .merge(crate::photos::routes())
         .merge(meta::routes())
         .merge(crate::backup::routes())
         .fallback(|| async { ApiError::NotFound })
@@ -60,7 +62,12 @@ async fn setup_status(State(st): State<AppState>) -> Result<Json<Value>, ApiErro
 /// Dati di un nuovo account, uguali per il primo admin e per chi entra con un invito.
 #[derive(Deserialize)]
 pub struct AccountKeys {
+    pub first_name: String,
+    pub last_name: String,
+    /// Calcolati da nome e cognome: chiave d'accesso e nome mostrato.
+    #[serde(skip)]
     pub username: String,
+    #[serde(skip)]
     pub display_name: String,
     pub auth_key: String,
     pub kdf_salt: String,
@@ -69,13 +76,12 @@ pub struct AccountKeys {
 }
 
 impl AccountKeys {
-    /// Normalizza nome utente e nome, e controlla la forma delle chiavi.
+    /// Normalizza nome e cognome, e controlla la forma delle chiavi.
     pub fn checked(mut self) -> Result<Self, ApiError> {
-        self.username = auth::normalize_username(&self.username)?;
-        self.display_name = self.display_name.trim().to_owned();
-        if self.display_name.is_empty() || self.display_name.chars().count() > 60 {
-            return Err(ApiError::BadRequest("il nome deve avere da 1 a 60 caratteri"));
-        }
+        self.first_name = auth::clean_name(&self.first_name)?;
+        self.last_name = auth::clean_name(&self.last_name)?;
+        self.display_name = format!("{} {}", self.first_name, self.last_name);
+        self.username = auth::name_key(&self.display_name);
         if !auth::valid_b64(&self.auth_key, Some(32), 64)
             || !auth::valid_b64(&self.kdf_salt, Some(16), 32)
             || !auth::valid_b64(&self.wrapped_key, None, 512)
@@ -145,6 +151,7 @@ async fn setup(
     let now = now_secs() as i64;
     let (uid, uname, dname, salt, wrapped) = (id.clone(), username.clone(), display_name.clone(), req.kdf_salt.clone(), req.wrapped_key.clone());
     let recovery = req.recovery_wrapped_key.clone();
+    let (first, last) = (req.first_name.clone(), req.last_name.clone());
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
@@ -154,9 +161,9 @@ async fn setup(
                 return Err(ApiError::Conflict("la configurazione iniziale e' gia' stata completata"));
             }
             tx.execute(
-                "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, recovery_wrapped_key, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 'admin', ?4, ?5, ?6, ?7, ?8, ?8)",
-                params![uid, uname, dname, hash, salt, wrapped, recovery, now],
+                "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, recovery_wrapped_key, created_at, updated_at, first_name, last_name)
+                 VALUES (?1, ?2, ?3, 'admin', ?4, ?5, ?6, ?7, ?8, ?8, ?9, ?10)",
+                params![uid, uname, dname, hash, salt, wrapped, recovery, now, first, last],
             )?;
             tx.execute("INSERT INTO settings (key, value) VALUES ('setup_completed_at', ?1)", params![now.to_string()])?;
             tx.execute("INSERT INTO audit_log (at, actor_id, action) VALUES (?1, ?2, 'setup_completed')", params![now, uid])?;
@@ -183,9 +190,10 @@ async fn prelogin(
     if !st.limiter.hit(&format!("prelogin:{ip}"), 30, 60) {
         return Err(ApiError::TooManyRequests);
     }
-    let username = auth::normalize_username(&req.username)?;
+    let username = auth::normalize_login(&req.username)?;
     let u = username.clone();
-    let real: Option<String> = st.db.run(move |c| Ok(c.query_row("SELECT kdf_salt FROM users WHERE username = ?1 AND disabled = 0", params![u], |r| r.get(0)).optional()?)).await?;
+    // Vale anche per un account sospeso: chi conosce la password deve poter leggere il motivo.
+    let real: Option<String> = st.db.run(move |c| Ok(c.query_row("SELECT kdf_salt FROM users WHERE username = ?1", params![u], |r| r.get(0)).optional()?)).await?;
     let salt = real.unwrap_or_else(|| auth::fake_salt(&st.server_key, &username));
     Ok(Json(json!({ "kdf_salt": salt, "kdf": kdf_params() })))
 }
@@ -216,7 +224,7 @@ async fn login(
     if !st.limiter.hit(&format!("login-ip:{ip}"), sec.login_attempts_per_minute_ip, 60) {
         return Err(ApiError::TooManyRequests);
     }
-    let username = auth::normalize_username(&req.username)?;
+    let username = auth::normalize_login(&req.username)?;
     if !st.limiter.hit(&format!("login-user:{username}"), sec.login_attempts_per_minute_user, 60) {
         return Err(ApiError::TooManyRequests);
     }
@@ -229,6 +237,7 @@ async fn login(
     let row: Option<Row> = st
         .db
         .run(move |c| {
+            crate::moderation::lift_expired(c, now_secs() as i64)?;
             Ok(c.query_row(
                 "SELECT id, display_name, role, auth_hash, kdf_salt, wrapped_key, disabled, pending FROM users WHERE username = ?1",
                 params![u],
@@ -243,11 +252,22 @@ async fn login(
     let verified = verify_blocking(&st, req.auth_key.clone(), stored).await?;
     let now = now_secs() as i64;
 
-    let Some((id, display_name, role, _hash, kdf_salt, wrapped_key, _, pending)) = row.filter(|r| verified && !r.6) else {
+    let Some((id, display_name, role, _hash, kdf_salt, wrapped_key, disabled, pending)) = row.filter(|_| verified) else {
         let _ = st.db.run(move |c| { c.execute("INSERT INTO audit_log (at, action) VALUES (?1, 'login_failed')", params![now])?; Ok(()) }).await;
         return Err(ApiError::Unauthorized);
     };
     // Lo si dice solo a chi conosce la password: non rivela nulla a un estraneo.
+    if disabled {
+        let blocked = st
+            .db
+            .run(move |c| {
+                Ok(c.query_row("SELECT block_kind, block_until, block_reason, block_tags FROM users WHERE id = ?1", params![id], |r| {
+                    Ok(crate::moderation::block_json(r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+                })?)
+            })
+            .await?;
+        return Ok((StatusCode::FORBIDDEN, Json(json!({ "error": "il tuo account e' bloccato", "blocked": blocked }))).into_response());
+    }
     if pending {
         return Err(ApiError::Forbidden("la tua richiesta e' in attesa di conferma dell'admin"));
     }

@@ -42,6 +42,10 @@ async fn main() -> anyhow::Result<()> {
                 Ok(n) => tracing::info!("gruppi di lavoro scaduti eliminati: {n}"),
                 Err(e) => tracing::error!("pulizia dei gruppi di lavoro non riuscita: {e:?}"),
             }
+            let now = taskhit_server::ratelimit::now_secs() as i64;
+            if let Err(e) = backups.db.run(move |c| taskhit_server::moderation::lift_expired(c, now)).await {
+                tracing::error!("riattivazione degli account sospesi non riuscita: {e:?}");
+            }
             match taskhit_server::backup::run_due(&backups).await {
                 Ok(Some(item)) => tracing::info!("backup automatico creato: {}", item.name),
                 Ok(None) => {}

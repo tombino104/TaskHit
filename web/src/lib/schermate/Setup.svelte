@@ -18,7 +18,7 @@
 
   // Passo 1
   let nome = $state('');
-  let username = $state('');
+  let cognome = $state('');
   let password = $state('');
   let password2 = $state('');
   // Passo 2
@@ -43,7 +43,7 @@
     if (password.length < 10) throw new Error('La password deve avere almeno 10 caratteri.');
     if (password !== password2) throw new Error('Le password non coincidono.');
     const k = await preparaChiavi(password, kdf ?? undefined);
-    const res = await api.setup({ username, display_name: nome || username, ...k.account });
+    const res = await api.setup({ first_name: nome, last_name: cognome, ...k.account });
     await usaChiave(k.dek, { username: res.user.username, kdf_salt: k.kdf_salt, kdf: kdf!, wrapped_key: k.account.wrapped_key });
     password = password2 = '';
     chiave = k.recupero;
@@ -115,8 +115,9 @@
 
       <form id="passo" onsubmit={avanti}>
         {#if passo === 1}
-          <label class="campo"><span class="dato">Nome</span><input bind:value={nome} maxlength="60" autocomplete="name" /></label>
-          <label class="campo"><span class="dato">Nome utente</span><input class="mono" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+          <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+          <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" />
+            <span class="nota">Entrerai con nome, cognome e password. Se sei anche in classe, l’account admin deve avere un nome diverso da quello da alunno.</span></label>
           <label class="campo"><span class="dato">Password</span><input type="password" bind:value={password} required autocomplete="new-password" placeholder="Almeno 10 caratteri" />
             <span class="nota">Non lascia mai questo dispositivo. Nemmeno chi gestisce il server può leggerla.</span></label>
           <label class="campo"><span class="dato">Ripeti password</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>

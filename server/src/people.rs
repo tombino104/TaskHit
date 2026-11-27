@@ -102,7 +102,14 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 common::audit(&tx, &user.id, "role_changed", Some(&format!("{id}:{role}")))?;
             }
             if let Some(disabled) = req.disabled {
-                tx.execute("UPDATE users SET disabled = ?2, updated_at = ?3 WHERE id = ?1", params![id, disabled, now()])?;
+                if disabled {
+                    tx.execute(
+                        "UPDATE users SET disabled = 1, block_kind = 'sospeso', block_until = NULL, blocked_by_role = 'admin', updated_at = ?2 WHERE id = ?1",
+                        params![id, now()],
+                    )?;
+                } else {
+                    crate::moderation::clear_block(&tx, &id)?;
+                }
                 if disabled {
                     tx.execute("DELETE FROM sessions WHERE user_id = ?1", params![id])?;
                 }
@@ -141,7 +148,7 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
 }
 
 /// Chi non fa parte di una classe non resta nei gruppi creati al suo interno.
-fn drop_orphan_memberships(c: &Connection) -> Result<(), ApiError> {
+pub fn drop_orphan_memberships(c: &Connection) -> Result<(), ApiError> {
     c.execute(
         "DELETE FROM group_members WHERE EXISTS (
             SELECT 1 FROM groups g WHERE g.id = group_members.group_id AND g.parent_id IS NOT NULL
@@ -440,13 +447,13 @@ async fn join(
                 return Err(ApiError::Conflict("troppe richieste in attesa: chiedi all'admin di smaltirle"));
             }
             if common::exists(&tx, "SELECT 1 FROM users WHERE username = ?1", &account.username)? {
-                return Err(ApiError::Conflict("nome utente gia' in uso"));
+                return Err(ApiError::Conflict(crate::meta::NAME_TAKEN));
             }
             tx.execute(
-                "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, recovery_wrapped_key, pending, pending_group_id, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, 'alunno', ?4, ?5, ?6, ?7, 1, ?8, ?9, ?9)",
+                "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, recovery_wrapped_key, pending, pending_group_id, created_at, updated_at, first_name, last_name)
+                 VALUES (?1, ?2, ?3, 'alunno', ?4, ?5, ?6, ?7, 1, ?8, ?9, ?9, ?10, ?11)",
                 params![auth::random_hex(16), account.username, account.display_name, hash, account.kdf_salt, account.wrapped_key,
-                        account.recovery_wrapped_key, group, now()],
+                        account.recovery_wrapped_key, group, now(), account.first_name, account.last_name],
             )?;
             tx.execute("UPDATE invites SET uses = uses + 1 WHERE id = ?1", params![invite])?;
             tx.commit()?;

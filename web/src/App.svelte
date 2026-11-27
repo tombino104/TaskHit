@@ -20,6 +20,8 @@
   import Backup from './lib/schermate/Backup.svelte';
   import Cerca from './lib/schermate/Cerca.svelte';
   import Lavori from './lib/schermate/Lavori.svelte';
+  import Classe from './lib/schermate/Classe.svelte';
+  import CambiaNome from './lib/schermate/CambiaNome.svelte';
   import ComponiLavori from './lib/schermate/ComponiLavori.svelte';
   import ServeHttps from './lib/schermate/ServeHttps.svelte';
 
@@ -74,12 +76,12 @@
 
   // L'admin gestisce l'impianto e non ha un calendario: le due parti dell'app non si sovrappongono.
   const COMUNI = ['profilo', 'aspetto', 'plugin'];
-  const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca', 'lavori'];
+  const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca', 'lavori', 'classe'];
   const DELL_ADMIN = [...COMUNI, 'persone', 'backup'];
   const admin = $derived(app.utente?.role === 'admin');
   const permessa = $derived((admin ? DELL_ADMIN : DELLA_CLASSE).includes(rotta.nome)
     || (rotta.nome === 'persone' && app.utente?.role === 'rappresentante'));
-  const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca', 'lavori']).includes(rotta.nome)
+  const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca', 'lavori', 'classe']).includes(rotta.nome)
     && !(rotta.nome === 'lavori' && rotta.arg));
   $effect(() => { if (fase === 'pronta' && app.utente && !permessa) sostituisci(admin ? 'persone' : 'oggi'); });
 </script>
@@ -92,6 +94,8 @@
   <main><Setup {kdf} onfine={() => { sostituisci('oggi'); fase = 'pronta'; }} /></main>
 {:else if !app.utente}
   <main><Accesso {kdf} {errore} /></main>
+{:else if app.meta && (app.utente.rename_request || app.utente.first_name === null)}
+  <main><CambiaNome /></main>
 {:else if app.meta}
   <div class="app">
     <Barra />
@@ -111,6 +115,7 @@
       {:else if rotta.nome === 'persone'}<Persone />
       {:else if rotta.nome === 'backup'}<Backup />
       {:else if rotta.nome === 'cerca'}<Cerca />
+      {:else if rotta.nome === 'classe'}<Classe />
       {:else if rotta.nome === 'lavori' && rotta.arg && app.utente.role === 'rappresentante'}
         {#key rotta.arg}<ComponiLavori quale={rotta.arg} />{/key}
       {:else if rotta.nome === 'lavori'}<Lavori />

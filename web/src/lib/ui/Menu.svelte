@@ -24,6 +24,8 @@
     <Icona nome={v.icona} spessore={rotta.nome === v.id ? 1.6 : 1.5} />{v.nome}
     {#if v.id === 'inbox' && app.inbox.unread && rotta.nome !== 'inbox'}
       <span class="conta"><span class="nascosto">Non lette: </span>{app.inbox.unread > 99 ? '99+' : app.inbox.unread}</span>
+    {:else if v.id === 'persone' && app.meta?.pending && rotta.nome !== 'persone'}
+      <span class="conta"><span class="nascosto">Richieste in attesa: </span>{app.meta.pending}</span>
     {:else if v.id === 'profilo' && !admin && app.meta?.pending && rotta.nome !== 'profilo'}
       <span class="conta"><span class="nascosto">Richieste in attesa: </span>{app.meta.pending}</span>
     {/if}

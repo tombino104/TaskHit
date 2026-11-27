@@ -1,15 +1,20 @@
 <script lang="ts">
   // Accesso e richiesta di iscrizione con codice invito (#/entra/CODICE).
+  import Blocco from '../ui/Blocco.svelte';
   import ChiaveRecupero from '../ui/ChiaveRecupero.svelte';
-  import { api, ApiError, type Kdf } from '../api';
+  import { api, ApiError, type Blocco as DatiBlocco, type Kdf } from '../api';
   import { accedi, app, messaggio, preparaChiavi } from '../store.svelte';
   import { rotta, sostituisci } from '../router.svelte';
 
   let { kdf, errore: iniziale = '' }: { kdf: Kdf | null; errore?: string } = $props();
 
   const entra = $derived(rotta.nome === 'entra');
-  let username = $state('');
   let nome = $state('');
+  let cognome = $state('');
+  // Gli account creati prima di nome e cognome entrano ancora con il nome utente, una volta.
+  let vecchio = $state(false);
+  let username = $state('');
+  let blocco = $state<DatiBlocco | null>(null);
   let codice = $state('');
   let password = $state('');
   let password2 = $state('');
@@ -21,13 +26,18 @@
   $effect(() => { errore = iniziale; });
 
   async function login(ev: SubmitEvent) {
-    ev.preventDefault(); errore = ''; occupato = true;
+    ev.preventDefault(); errore = ''; blocco = null;
+    // Con nome e cognome il server si aspetta almeno uno spazio.
+    const chi = vecchio ? username.trim() : `${nome.trim()} ${cognome.trim()}`;
+    occupato = true;
     try {
-      await accedi(username, password);
+      await accedi(chi, password);
       password = '';
       sostituisci('oggi');
-    } catch (e) { errore = e instanceof ApiError && e.status === 401 ? 'Nome utente o password errati.' : messaggio(e); }
-    finally { occupato = false; }
+    } catch (e) {
+      if (e instanceof ApiError && e.blocco) blocco = e.blocco;
+      else errore = e instanceof ApiError && e.status === 401 ? (vecchio ? 'Nome utente o password errati.' : 'Nome, cognome o password errati.') : messaggio(e);
+    } finally { occupato = false; }
   }
 
   async function iscriviti(ev: SubmitEvent) {
@@ -37,7 +47,7 @@
     occupato = true;
     try {
       const k = await preparaChiavi(password, kdf ?? undefined);
-      await api.join({ code: codice, username, display_name: nome || username, ...k.account });
+      await api.join({ code: codice, first_name: nome, last_name: cognome, ...k.account });
       k.dek.fill(0);
       password = password2 = '';
       chiave = k.recupero; inviata = true;
@@ -52,7 +62,7 @@
     <span class="marchio">TaskHit</span>
     <span class="dato">Richiesta inviata</span>
     <h1>Manca solo la conferma</h1>
-    <p class="lede">L'admin deve accettare la tua richiesta. Dopo potrai entrare con nome utente e password.</p>
+    <p class="lede">L'admin deve accettare la tua richiesta. Dopo potrai entrare con nome, cognome e password.</p>
     <button type="button" class="pulsante pieno grande" onclick={() => { inviata = false; sostituisci('accesso'); }}>Vai all'accesso</button>
   </div>
 {:else}
@@ -69,13 +79,18 @@
     <form onsubmit={entra ? iscriviti : login}>
       {#if entra}
         <label class="campo"><span class="dato">Codice invito</span><input class="mono" bind:value={codice} required autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="XXX-XXX-XXX" /></label>
-        <label class="campo"><span class="dato">Nome e cognome</span><input bind:value={nome} required maxlength="60" autocomplete="name" /></label>
       {/if}
-      <label class="campo"><span class="dato">Nome utente</span><input class="mono" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+      {#if vecchio && !entra}
+        <label class="campo"><span class="dato">Nome utente</span><input class="mono" bind:value={username} required minlength="3" maxlength="32" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+      {:else}
+        <label class="campo"><span class="dato">Nome</span><input bind:value={nome} required maxlength="40" autocomplete="given-name" /></label>
+        <label class="campo"><span class="dato">Cognome</span><input bind:value={cognome} required maxlength="40" autocomplete="family-name" /></label>
+      {/if}
       <label class="campo"><span class="dato">Password</span><input type="password" bind:value={password} required autocomplete={entra ? 'new-password' : 'current-password'} placeholder={entra ? 'Almeno 10 caratteri' : ''} /></label>
       {#if entra}
         <label class="campo"><span class="dato">Ripeti password</span><input type="password" bind:value={password2} required autocomplete="new-password" /></label>
       {/if}
+      {#if blocco}<Blocco {blocco} />{/if}
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
       <button class="pulsante pieno grande" disabled={occupato || !app.online} aria-busy={occupato}>
         {occupato ? 'Derivo le chiavi…' : entra ? 'Chiedi di entrare' : 'Entra'}
@@ -86,6 +101,7 @@
       <a href="#/accesso" class="collegamento">Ho già un account</a>
     {:else}
       <a href="#/entra" class="collegamento">Hai un codice invito?</a>
+      <button type="button" class="collegamento vecchio" onclick={() => { vecchio = !vecchio; errore = ''; blocco = null; }}>{vecchio ? 'Entra con nome e cognome' : 'Avevi un nome utente?'}</button>
     {/if}
   </div>
 {/if}
@@ -98,4 +114,5 @@
   form { display: flex; flex-direction: column; gap: 18px; }
   form .pulsante { margin-top: 6px; }
   .collegamento { align-self: center; }
+  .vecchio { margin-top: -14px; color: var(--attenuato); }
 </style>

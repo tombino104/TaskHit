@@ -252,12 +252,22 @@ export async function leggiProfilo(): Promise<Profilo | null> {
   if (!dek) return null;
   try { return await C.decryptJson<Profilo>(dek, u.profile_blob, `profile:${u.id}`); } catch { return null; }
 }
-export async function salvaProfilo(nome: string, profilo: Profilo | null): Promise<void> {
+export async function salvaProfilo(nome: { first_name: string; last_name: string }, profilo: Profilo | null): Promise<void> {
   const u = app.utente;
   if (!u) return;
   const blob = profilo && dek ? await C.encryptJson(dek, profilo, `profile:${u.id}`) : undefined;
-  await api.salvaMe({ display_name: nome, profile_blob: blob });
+  await api.salvaMe({ ...nome, profile_blob: blob });
+  await dopoIlNome();
+}
+export async function salvaNome(first_name: string, last_name: string): Promise<void> {
+  await api.salvaMe({ first_name, last_name });
+  await dopoIlNome();
+}
+/** Con un nome nuovo cambia anche ciò con cui si entra: lo sblocco sul dispositivo va aggiornato. */
+async function dopoIlNome(): Promise<void> {
   await sincronizza();
+  const salvato = leggi<Sblocco>(SBLOCCO);
+  if (salvato && app.utente) scrivi(SBLOCCO, { ...salvato, username: app.utente.username });
 }
 
 export async function leggiTutto(): Promise<void> {

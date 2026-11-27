@@ -7,7 +7,7 @@
   import { api } from '../api';
   import { app, avvisa, messaggio, salvaEvento, sincronizza } from '../store.svelte';
   import { indietro, rotta, sostituisci } from '../router.svelte';
-  import { AVVISI, commuta, etichettaGruppo, puoPubblicare } from '../events';
+  import { AVVISI, commuta, etichettaGruppo, nomeModo, puoPubblicare } from '../events';
   import { dirittoSu } from '../lavori';
   import { aSecondi, chiave, chiaveDi, chiaveValida, daChiave, dataBreve, ora } from '../dates';
 
@@ -28,11 +28,22 @@
     if (!esistente || !attuale) return possibili;
     return possibili.filter((g) => (attuale.work ? g.id === attuale.id : !g.work));
   });
-  const predefinito = untrack(() => app.meta?.labels.find((t) => !alunno || t.personal));
+  const predefinito = untrack(() => app.meta?.labels.find((t) => !t.hidden && (!alunno || t.personal)));
+  // Un evento vecchio (anche privato) può avere un tipo o una modalità ritirati: si portano a quelli di oggi.
+  const iniziale = untrack(() => {
+    const t = app.meta?.labels.find((x) => x.id === origine?.label_id);
+    if (!origine) return null;
+    if (t?.hidden) {
+      const v = app.meta?.labels.find((x) => x.name === 'Verifica');
+      return { tipo: v?.id ?? null, sotto: v?.subs.includes('recupero') ? 'recupero' : null };
+    }
+    const sotto = origine.sub_kind === 'teorica' && t?.subs.includes('scritta') ? 'scritta' : origine.sub_kind;
+    return { tipo: origine.label_id, sotto };
+  });
 
   let titolo = $state(origine?.title ?? '');
-  let tipo = $state<string | null>(origine?.label_id ?? predefinito?.id ?? null);
-  let sotto = $state<string | null>(origine?.sub_kind ?? predefinito?.subs[0] ?? null);
+  let tipo = $state<string | null>(iniziale?.tipo ?? predefinito?.id ?? null);
+  let sotto = $state<string | null>(iniziale ? iniziale.sotto : (predefinito?.subs[0] ?? null));
   let materia = $state<string | null>(origine?.tag_id ?? null);
   let giorno = $state(origine ? chiaveDi(origine.starts_at) : chiaveValida(arg) ? arg : chiave(new Date()));
   let dalle = $state(origine ? ora(origine.starts_at) : '08:00');
@@ -136,7 +147,7 @@
       <fieldset>
         <legend class="dato">Tipo · etichetta</legend>
         <div role="radiogroup" aria-label="Tipo" class="scelte">
-          {#each app.meta?.labels ?? [] as t (t.id)}
+          {#each app.meta?.labels.filter((x) => !x.hidden) ?? [] as t (t.id)}
             <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === t.id} disabled={privato && alunno && !t.personal} onclick={() => scegliTipo(t.id)}>{t.name}</button>
           {/each}
           {#if rappresentante}
@@ -146,7 +157,7 @@
         {#if scelto?.subs.length}
           <div role="radiogroup" aria-label="Modalità" class="modi">
             {#each scelto.subs as s (s)}
-              <button type="button" role="radio" aria-checked={sotto === s} onclick={() => (sotto = s)}><span aria-hidden="true"><i></i></span>{s.charAt(0).toUpperCase() + s.slice(1)}</button>
+              <button type="button" role="radio" aria-checked={sotto === s} onclick={() => (sotto = s)}><span aria-hidden="true"><i></i></span>{nomeModo(s)}</button>
             {/each}
           </div>
         {/if}

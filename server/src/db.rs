@@ -16,6 +16,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/003_admin_fuori_dalla_classe.sql"),
     include_str!("../migrations/004_gruppi_della_classe.sql"),
     include_str!("../migrations/005_gruppi_di_lavoro.sql"),
+    include_str!("../migrations/006_nomi_foto_moderazione.sql"),
 ];
 
 /// Versione dello schema che questa build conosce.
@@ -109,5 +110,34 @@ mod tests {
         assert_eq!(one("SELECT COUNT(*) FROM group_members WHERE user_id = 'r'"), 1);
         // L'evento gia' pubblicato resta alla classe, senza riferimento all'admin.
         assert_eq!(one("SELECT COUNT(*) FROM events WHERE id = 'e' AND subject_id IS NULL"), 1);
+    }
+
+    #[test]
+    fn upgrading_merges_the_test_types() {
+        let mut c = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..5] {
+            c.execute_batch(sql).unwrap();
+        }
+        c.pragma_update(None, "user_version", 5).unwrap();
+        c.execute_batch(
+            "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, disabled, created_at, updated_at)
+             VALUES ('r','rap','R','rappresentante','h','s','w',0,0,0), ('x','fermo','F','alunno','h','s','w',1,0,0);
+             INSERT INTO groups (id, name, kind, created_at) VALUES ('g','4B','classe',0);
+             INSERT INTO events (id, visibility, owner_id, group_id, title, label_id, sub_kind, starts_at, created_by, created_at, updated_by, updated_at)
+             SELECT 'a','public','r','g','A', id, 'teorica', 1,'r',0,'r',0 FROM labels WHERE name = 'Verifica';
+             INSERT INTO events (id, visibility, owner_id, group_id, title, label_id, sub_kind, starts_at, created_by, created_at, updated_by, updated_at)
+             SELECT 'b','public','r','g','B', id, 'pratica', 1,'r',0,'r',0 FROM labels WHERE name = 'Verifica di recupero';
+             INSERT INTO proposals (id, kind, proposed_by, data, created_at)
+             SELECT 'p','create','r', json_object('label_id', id, 'sub_kind', 'teorica'), 0 FROM labels WHERE name = 'Verifica di recupero';",
+        )
+        .unwrap();
+        migrate(&mut c).unwrap();
+        let one = |sql: &str| c.query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap();
+        let verifica = "(SELECT id FROM labels WHERE name = 'Verifica')";
+        assert_eq!(one(&format!("SELECT COUNT(*) FROM events WHERE id = 'a' AND sub_kind = 'scritta' AND label_id = {verifica}")), 1);
+        assert_eq!(one(&format!("SELECT COUNT(*) FROM events WHERE id = 'b' AND sub_kind = 'recupero' AND label_id = {verifica}")), 1);
+        assert_eq!(one(&format!("SELECT COUNT(*) FROM proposals WHERE json_extract(data, '$.sub_kind') = 'recupero' AND json_extract(data, '$.label_id') = {verifica}")), 1);
+        assert_eq!(one("SELECT COUNT(*) FROM labels WHERE hidden = 1"), 1);
+        assert_eq!(one("SELECT COUNT(*) FROM users WHERE id = 'x' AND block_kind = 'sospeso'"), 1);
     }
 }

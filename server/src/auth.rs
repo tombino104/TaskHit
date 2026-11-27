@@ -72,6 +72,47 @@ pub fn normalize_username(raw: &str) -> Result<String, ApiError> {
     if ok { Ok(u) } else { Err(ApiError::BadRequest("il nome utente deve avere 3-32 caratteri: lettere minuscole, numeri, punto, trattino")) }
 }
 
+/// Una parte del nome (nome o cognome), ripulita dagli spazi in eccesso.
+pub fn clean_name(raw: &str) -> Result<String, ApiError> {
+    let name = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+    let ok = (1..=40).contains(&name.chars().count())
+        && name.chars().any(char::is_alphabetic)
+        && name.chars().all(|c| c.is_alphabetic() || matches!(c, ' ' | '\'' | '\u{2019}' | '-' | '.'));
+    if ok { Ok(name) } else { Err(ApiError::BadRequest("nome e cognome: da 1 a 40 lettere ciascuno, senza numeri o simboli")) }
+}
+
+/// La chiave d'accesso di un nome: maiuscole, accenti, apostrofi e trattini non contano.
+/// "Niccolò  D'Amico" e "niccolo damico" sono la stessa persona.
+pub fn name_key(full: &str) -> String {
+    let folded: String = full
+        .to_lowercase()
+        .chars()
+        .filter_map(|c| match c {
+            '\'' | '\u{2019}' => None,
+            '-' | '.' => Some(' '),
+            'à' | 'á' | 'â' | 'ä' | 'ã' | 'å' => Some('a'),
+            'è' | 'é' | 'ê' | 'ë' => Some('e'),
+            'ì' | 'í' | 'î' | 'ï' => Some('i'),
+            'ò' | 'ó' | 'ô' | 'ö' | 'õ' => Some('o'),
+            'ù' | 'ú' | 'û' | 'ü' => Some('u'),
+            'ç' => Some('c'),
+            'ñ' => Some('n'),
+            c => Some(c),
+        })
+        .collect();
+    folded.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Quello che si scrive per entrare: «Nome Cognome», oppure il vecchio nome utente (senza spazi).
+pub fn normalize_login(raw: &str) -> Result<String, ApiError> {
+    if !raw.trim().contains(char::is_whitespace) {
+        return normalize_username(raw);
+    }
+    let key = name_key(raw);
+    let ok = (1..=90).contains(&key.chars().count()) && key.chars().all(|c| c.is_alphabetic() || c == ' ');
+    if ok { Ok(key) } else { Err(ApiError::BadRequest("nome o cognome non validi")) }
+}
+
 fn read_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     for value in headers.get_all(COOKIE) {
         let Ok(text) = value.to_str() else { continue };
@@ -114,18 +155,24 @@ impl FromRequestParts<AppState> for AuthUser {
         let sid = session_id(&token);
         let now = crate::ratelimit::now_secs() as i64;
         let sid2 = sid.clone();
+        // Chi deve cambiare nome puo' solo leggere, cambiarlo o uscire.
+        let reading = matches!(parts.method, axum::http::Method::GET | axum::http::Method::HEAD);
+        let allowed_anyway = reading || ["/me", "/auth/logout", "/me/sessions/revoke-others"].iter().any(|p| parts.uri.path().trim_start_matches("/api") == *p);
         state
             .db
             .run(move |c| {
                 let row = c.query_row(
-                    "SELECT u.id, u.username, u.display_name, u.role, s.last_seen
+                    "SELECT u.id, u.username, u.display_name, u.role, s.last_seen, u.rename_request IS NOT NULL
                        FROM sessions s JOIN users u ON u.id = s.user_id
                       WHERE s.id = ?1 AND s.expires_at > ?2 AND u.disabled = 0 AND u.pending = 0",
                     rusqlite::params![sid2, now],
-                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?)),
+                    |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, String>(3)?, r.get::<_, i64>(4)?, r.get::<_, bool>(5)?)),
                 );
                 match row {
-                    Ok((id, username, display_name, role, last_seen)) => {
+                    Ok((id, username, display_name, role, last_seen, renaming)) => {
+                        if renaming && !allowed_anyway {
+                            return Err(ApiError::Forbidden("prima devi cambiare il tuo nome"));
+                        }
                         // Aggiorna last_seen al massimo ogni 5 minuti: niente scrittura a ogni richiesta.
                         if now - last_seen > 300 {
                             c.execute("UPDATE sessions SET last_seen = ?1 WHERE id = ?2", rusqlite::params![now, sid2])?;

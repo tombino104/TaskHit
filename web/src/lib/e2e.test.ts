@@ -23,22 +23,22 @@ describe.skipIf(!base)('client contro server reale', () => {
     const dek = C.newDek();
     const rec = C.newRecoveryKey();
     const setup = await post('/api/setup', {
-      username: 'Lorenzo', display_name: 'Lorenzo', auth_key: authKey, kdf_salt: C.b64.enc(salt),
+      first_name: 'Lorenzo', last_name: 'Prova', auth_key: authKey, kdf_salt: C.b64.enc(salt),
       wrapped_key: await C.wrapDek(wrapKey, dek),
       recovery_wrapped_key: await C.wrapDek(await C.recoveryWrapKey(rec.bytes), dek),
     });
     expect(setup.status, JSON.stringify(setup.body)).toBe(200);
 
     // "Altro dispositivo": rifà tutto da zero partendo da nome utente e password.
-    const pre = await post('/api/auth/prelogin', { username: 'lorenzo' });
+    const pre = await post('/api/auth/prelogin', { username: 'lorenzo prova' });
     const k2 = await C.deriveKeys('una password lunga', C.b64.dec(pre.body.kdf_salt), pre.body.kdf);
-    const login = await post('/api/auth/login', { username: 'lorenzo', auth_key: k2.authKey });
+    const login = await post('/api/auth/login', { username: 'lorenzo prova', auth_key: k2.authKey });
     expect(login.status).toBe(200);
     expect(await C.unwrapDek(k2.wrapKey, login.body.wrapped_key)).toEqual(dek);
 
     // Password sbagliata: il server rifiuta, e comunque la DEK non si aprirebbe.
     const bad = await C.deriveKeys('password sbagliata!', C.b64.dec(pre.body.kdf_salt), pre.body.kdf);
-    expect((await post('/api/auth/login', { username: 'lorenzo', auth_key: bad.authKey })).status).toBe(401);
+    expect((await post('/api/auth/login', { username: 'lorenzo prova', auth_key: bad.authKey })).status).toBe(401);
 
     // Dati privati: cifrati col client, il server non li vede (qui verifichiamo solo il giro di chiavi).
     const me = await fetch(base + '/api/me', { headers: { cookie: login.cookie! } });

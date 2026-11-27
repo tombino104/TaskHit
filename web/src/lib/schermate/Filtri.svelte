@@ -16,7 +16,7 @@
   <fieldset>
     <legend class="dato">Tipo di evento</legend>
     <div class="scelte">
-      {#each app.meta?.labels ?? [] as t (t.id)}
+      {#each app.meta?.labels.filter((x) => !x.hidden) ?? [] as t (t.id)}
         <button type="button" class="scelta tipo" aria-pressed={app.filtri.tipi.includes(t.id)} onclick={() => (app.filtri.tipi = commuta(app.filtri.tipi, t.id))}>{t.name}</button>
       {/each}
     </div>

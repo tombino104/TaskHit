@@ -18,6 +18,7 @@ use serde_json::{Map, Value, json};
 
 const SETTINGS: [&str; 4] = ["instance_name", "public_url", "school_year", "timezone"];
 const PLUGINS: [&str; 1] = ["grafico"];
+pub const NAME_TAKEN: &str = "esiste gia' un account con questo nome: aggiungi per esempio il secondo nome";
 const MAX_PROFILE_CHARS: usize = 100_000;
 
 pub fn routes() -> Router<AppState> {
@@ -54,10 +55,10 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             let tags = rows(c, "SELECT id, name, color FROM tags ORDER BY sort, name COLLATE NOCASE", |r| {
                 Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "color": r.get::<_, String>(2)? }))
             })?;
-            let labels = rows(c, "SELECT id, name, subs, personal FROM labels ORDER BY sort, name COLLATE NOCASE", |r| {
+            let labels = rows(c, "SELECT id, name, subs, personal, hidden FROM labels ORDER BY sort, name COLLATE NOCASE", |r| {
                 let subs: String = r.get(2)?;
                 Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?,
-                           "subs": subs.split(',').filter(|s| !s.is_empty()).collect::<Vec<_>>(), "personal": r.get::<_, bool>(3)? }))
+                           "subs": subs.split(',').filter(|s| !s.is_empty()).collect::<Vec<_>>(), "personal": r.get::<_, bool>(3)?, "hidden": r.get::<_, bool>(4)? }))
             })?;
 
             // Ognuno vede i propri gruppi e i compagni che ne fanno parte. L'admin vede tutti i gruppi
@@ -77,7 +78,8 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                 .collect::<Result<_, _>>()?;
             let mut groups = vec![];
             let mut members = c.prepare(
-                "SELECT u.id, u.display_name, u.role FROM group_members m JOIN users u ON u.id = m.user_id
+                "SELECT u.id, u.display_name, u.role, a.updated_at FROM group_members m JOIN users u ON u.id = m.user_id
+                   LEFT JOIN avatars a ON a.user_id = u.id
                   WHERE m.group_id = ?1 AND u.disabled = 0 AND u.pending = 0 AND u.role <> 'admin' ORDER BY u.display_name COLLATE NOCASE",
             )?;
             let mut pending = 0;
@@ -107,7 +109,7 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                 }
                 let list: Vec<Value> = members
                     .query_map(params![id], |r| {
-                        Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "role": r.get::<_, String>(2)? }))
+                        Ok(json!({ "id": r.get::<_, String>(0)?, "name": r.get::<_, String>(1)?, "role": r.get::<_, String>(2)?, "photo": r.get::<_, Option<i64>>(3)? }))
                     })?
                     .collect::<Result<_, _>>()?;
                 groups.push(json!({ "id": id, "name": name, "kind": kind, "parent_id": parent_id, "mine": mine, "manage": manage, "work": state, "members": list }));
@@ -253,16 +255,22 @@ async fn save_plugin(State(st): State<AppState>, user: AuthUser, Path(id): Path<
 
 async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>, ApiError> {
     let uid = user.id.clone();
-    let (profile, sessions) = st
+    type Own = (Option<String>, Option<String>, Option<String>, Option<String>, Option<i64>, i64);
+    let (profile, first, last, rename, photo, sessions): Own = st
         .db
         .run(move |c| {
-            let profile: Option<String> = c.query_row("SELECT profile_blob FROM users WHERE id = ?1", params![uid], |r| r.get(0))?;
             let sessions: i64 = c.query_row("SELECT COUNT(*) FROM sessions WHERE user_id = ?1 AND expires_at > ?2", params![uid, now()], |r| r.get(0))?;
-            Ok((profile, sessions))
+            Ok(c.query_row(
+                "SELECT profile_blob, first_name, last_name, rename_request, (SELECT updated_at FROM avatars WHERE user_id = ?1) FROM users WHERE id = ?1",
+                params![uid],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, sessions)),
+            )?)
         })
         .await?;
     Ok(Json(json!({
         "id": user.id, "username": user.username, "display_name": user.display_name, "role": user.role,
+        "first_name": first, "last_name": last, "photo": photo,
+        "rename_request": rename.and_then(|r| serde_json::from_str::<Value>(&r).ok()),
         "profile_blob": profile, "sessions": sessions,
     })))
 }
@@ -270,22 +278,48 @@ async fn me(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>, A
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct MeReq {
-    display_name: Option<String>,
+    /// Nome e cognome si cambiano insieme: sono anche cio' con cui si entra.
+    first_name: Option<String>,
+    last_name: Option<String>,
     /// Dati del profilo cifrati sul dispositivo.
     profile_blob: Option<String>,
 }
 
 async fn update_me(State(st): State<AppState>, user: AuthUser, Json(req): Json<MeReq>) -> Result<Json<Value>, ApiError> {
-    let name = req.display_name.map(|n| common::required_text(&n, 60, "il nome deve avere da 1 a 60 caratteri")).transpose()?;
+    let name = match (&req.first_name, &req.last_name) {
+        (None, None) => None,
+        (Some(first), Some(last)) => {
+            let (first, last) = (auth::clean_name(first)?, auth::clean_name(last)?);
+            let full = format!("{first} {last}");
+            Some((auth::name_key(&full), full, first, last))
+        }
+        _ => return Err(ApiError::BadRequest("servono sia il nome sia il cognome")),
+    };
     if req.profile_blob.as_deref().is_some_and(|b| !auth::valid_b64(b, None, MAX_PROFILE_CHARS)) {
         return Err(ApiError::BadRequest("profilo cifrato non valido"));
     }
     st.db
         .run(move |c| {
-            c.execute(
-                "UPDATE users SET display_name = coalesce(?2, display_name), profile_blob = coalesce(?3, profile_blob), updated_at = ?4 WHERE id = ?1",
-                params![user.id, name, req.profile_blob, now()],
+            let tx = c.transaction()?;
+            if let Some((key, full, first, last)) = &name {
+                if tx.prepare("SELECT 1 FROM users WHERE username = ?1 AND id <> ?2")?.exists(params![key, user.id])? {
+                    return Err(ApiError::Conflict(NAME_TAKEN));
+                }
+                // Se e' stato chiesto un nome diverso, rimettere lo stesso non basta.
+                let asked: bool = tx.query_row("SELECT rename_request IS NOT NULL FROM users WHERE id = ?1", params![user.id], |r| r.get(0))?;
+                if asked && *key == user.username {
+                    return Err(ApiError::BadRequest("scegli un nome diverso da quello di prima"));
+                }
+                tx.execute(
+                    "UPDATE users SET username = ?2, display_name = ?3, first_name = ?4, last_name = ?5, rename_request = NULL WHERE id = ?1",
+                    params![user.id, key, full, first, last],
+                )?;
+            }
+            tx.execute(
+                "UPDATE users SET profile_blob = coalesce(?2, profile_blob), updated_at = ?3 WHERE id = ?1",
+                params![user.id, req.profile_blob, now()],
             )?;
+            tx.commit()?;
             Ok(())
         })
         .await?;

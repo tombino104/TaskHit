@@ -40,8 +40,8 @@ async fn send(app: &Router, method: Method, uri: &str, body: Option<Value>, extr
 
 fn setup_body(username: &str, auth_byte: u8) -> Value {
     json!({
-        "username": username,
-        "display_name": "Lorenzo",
+        "first_name": username,
+        "last_name": "Prova",
         "auth_key": key(auth_byte),
         "kdf_salt": B64.encode([9u8; 16]),
         "wrapped_key": B64.encode([5u8; 60]),
@@ -62,7 +62,7 @@ async fn setup_login_me_logout() {
     let (s, h, body) = send(&app, Method::POST, "/api/setup", Some(setup_body("Lorenzo", 1)), &[]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
     assert_eq!(body["user"]["role"], "admin");
-    assert_eq!(body["user"]["username"], "lorenzo", "il nome utente va normalizzato");
+    assert_eq!(body["user"]["username"], "lorenzo prova", "nome e cognome diventano la chiave d'accesso");
     let set_cookie = h.get(header::SET_COOKIE).unwrap().to_str().unwrap().to_owned();
     assert!(set_cookie.contains("HttpOnly") && set_cookie.contains("SameSite=Strict"), "{set_cookie}");
 
@@ -74,12 +74,12 @@ async fn setup_login_me_logout() {
 
     // La sessione creata dal setup vale.
     let (s, _, me) = send(&app, Method::GET, "/api/me", None, &[("cookie", &cookie_of(&h))]).await;
-    assert_eq!((s, me["username"].clone()), (StatusCode::OK, json!("lorenzo")));
+    assert_eq!((s, me["display_name"].clone()), (StatusCode::OK, json!("Lorenzo Prova")));
 
     // Login: chiave sbagliata, poi giusta.
-    let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(2)})), &[]).await;
+    let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(2)})), &[]).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED);
-    let (s, h2, body) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"LORENZO","auth_key":key(1)})), &[]).await;
+    let (s, h2, body) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"LORENZO   Pròva","auth_key":key(1)})), &[]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
     assert_eq!(body["wrapped_key"], B64.encode([5u8; 60]));
     assert_eq!(body["kdf_salt"], B64.encode([9u8; 16]));
@@ -110,17 +110,17 @@ async fn setup_refused_through_tunnel_by_default() {
 async fn prelogin_does_not_reveal_which_users_exist() {
     let (app, _dir) = app(|_| {});
     send(&app, Method::POST, "/api/setup", Some(setup_body("lorenzo", 1)), &[]).await;
-    let (s, _, real) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"lorenzo"})), &[]).await;
+    let (s, _, real) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"lorenzo prova"})), &[]).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(real["kdf_salt"], B64.encode([9u8; 16]));
-    let (_, _, a) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"fantasma"})), &[]).await;
-    let (_, _, b) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"fantasma"})), &[]).await;
+    let (_, _, a) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"fantasma prova"})), &[]).await;
+    let (_, _, b) = send(&app, Method::POST, "/api/auth/prelogin", Some(json!({"username":"fantasma prova"})), &[]).await;
     assert_eq!(a["kdf_salt"], b["kdf_salt"], "il salt finto deve essere stabile");
     assert_ne!(a["kdf_salt"], real["kdf_salt"]);
     assert_eq!(B64.decode(a["kdf_salt"].as_str().unwrap()).unwrap().len(), 16, "stessa forma di un salt vero");
     // Errore identico per utente inesistente e password sbagliata.
-    let (s1, _, e1) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"fantasma","auth_key":key(1)})), &[]).await;
-    let (s2, _, e2) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(3)})), &[]).await;
+    let (s1, _, e1) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"fantasma prova","auth_key":key(1)})), &[]).await;
+    let (s2, _, e2) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(3)})), &[]).await;
     assert_eq!((s1, e1), (s2, e2));
 }
 
@@ -131,12 +131,12 @@ async fn login_attempts_are_rate_limited_per_user() {
     let mut last = StatusCode::OK;
     for _ in 0..6 {
         // IP diversi: il limite per nome utente scatta comunque.
-        let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(7)})), &[]).await;
+        let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(7)})), &[]).await;
         last = s;
     }
     assert_eq!(last, StatusCode::TOO_MANY_REQUESTS);
     // Anche la password giusta e' bloccata durante la pausa: un attaccante non puo' sfruttarla per indovinare.
-    let (s, h, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(1)})), &[]).await;
+    let (s, h, _) = send(&app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(1)})), &[]).await;
     assert_eq!(s, StatusCode::TOO_MANY_REQUESTS);
     assert!(h.contains_key(header::RETRY_AFTER));
 }
@@ -158,7 +158,7 @@ async fn per_ip_limit_applies_to_the_whole_api() {
 #[tokio::test]
 async fn rejects_cross_origin_writes_and_oversized_bodies() {
     let (app, _dir) = app(|_| {});
-    let body = json!({"username":"lorenzo","auth_key":key(1)});
+    let body = json!({"username":"lorenzo prova","auth_key":key(1)});
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(body.clone()), &[("origin", "https://evil.example")]).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(body.clone()), &[("sec-fetch-site", "cross-site")]).await;
@@ -166,7 +166,7 @@ async fn rejects_cross_origin_writes_and_oversized_bodies() {
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(body), &[("origin", "http://localhost")]).await;
     assert_eq!(s, StatusCode::UNAUTHORIZED, "stessa origine: arriva al login");
 
-    let big = json!({"username":"lorenzo","auth_key":"x".repeat(300_000)});
+    let big = json!({"username":"lorenzo prova","auth_key":"x".repeat(300_000)});
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(big), &[]).await;
     assert_eq!(s, StatusCode::PAYLOAD_TOO_LARGE);
 }
@@ -174,7 +174,7 @@ async fn rejects_cross_origin_writes_and_oversized_bodies() {
 #[tokio::test]
 async fn public_url_pins_the_allowed_origin() {
     let (app, _dir) = app(|c| c.server.public_url = Some("https://taskhit.example".into()));
-    let body = json!({"username":"lorenzo","auth_key":key(1)});
+    let body = json!({"username":"lorenzo prova","auth_key":key(1)});
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(body.clone()), &[("origin", "http://localhost")]).await;
     assert_eq!(s, StatusCode::FORBIDDEN, "con public_url vale solo quella origine");
     let (s, _, _) = send(&app, Method::POST, "/api/auth/login", Some(body), &[("origin", "https://taskhit.example")]).await;
@@ -209,7 +209,7 @@ async fn api_hardening_headers_and_unknown_routes() {
 #[tokio::test]
 async fn setup_rejects_malformed_keys() {
     let (app, _dir) = app(|_| {});
-    for (field, bad) in [("auth_key", json!("corta")), ("kdf_salt", json!(B64.encode([1u8; 8]))), ("wrapped_key", json!("***")), ("username", json!("a b"))] {
+    for (field, bad) in [("auth_key", json!("corta")), ("kdf_salt", json!(B64.encode([1u8; 8]))), ("wrapped_key", json!("***")), ("first_name", json!("x<y"))] {
         let mut body = setup_body("lorenzo", 1);
         body[field] = bad;
         let (s, _, _) = send(&app, Method::POST, "/api/setup", Some(body), &[]).await;
@@ -269,7 +269,7 @@ async fn data_survives_restart_and_migrations_are_idempotent() {
     let second = make(); // secondo avvio sulla stessa cartella: stesse chiavi, stesso database
     let (_, _, st) = send(&second, Method::GET, "/api/setup/status", None, &[]).await;
     assert_eq!(st["needs_setup"], json!(false));
-    let (s, _, _) = send(&second, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(1)})), &[]).await;
+    let (s, _, _) = send(&second, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(1)})), &[]).await;
     assert_eq!(s, StatusCode::OK);
 }
 
@@ -347,7 +347,7 @@ impl Classe {
         self.post(&format!("/api/users/{id}/accept"), json!({}), &self.admin).await;
         let (s, _, b) = send(&self.app, Method::PATCH, &format!("/api/users/{id}"), Some(json!({"role": role})), &[("cookie", &self.admin)]).await;
         assert_eq!(s, StatusCode::OK, "{b}");
-        let (s, h, b) = send(&self.app, Method::POST, "/api/auth/login", Some(json!({"username":username,"auth_key":key(byte)})), &[]).await;
+        let (s, h, b) = send(&self.app, Method::POST, "/api/auth/login", Some(json!({"username":format!("{username} Prova"),"auth_key":key(byte)})), &[]).await;
         assert_eq!(s, StatusCode::OK, "{b}");
         (id, cookie_of(&h))
     }
@@ -378,7 +378,7 @@ async fn invites_require_admin_approval() {
     let (s, _, b) = send(&c.app, Method::POST, "/api/join", Some(body.clone()), &[]).await;
     assert_eq!(s, StatusCode::OK, "{b}");
 
-    let login = json!({"username":"anna","auth_key":key(4)});
+    let login = json!({"username":"anna prova","auth_key":key(4)});
     let (s, h, b) = send(&c.app, Method::POST, "/api/auth/login", Some(login.clone()), &[]).await;
     assert_eq!(s, StatusCode::FORBIDDEN, "{b}");
     assert!(!h.contains_key(header::SET_COOKIE), "nessuna sessione prima dell'approvazione");
@@ -400,7 +400,7 @@ async fn invites_require_admin_approval() {
     let (_, invs) = c.get("/api/invites", &c.admin).await;
     let iid = invs["invites"][0]["id"].as_str().unwrap().to_owned();
     c.post(&format!("/api/invites/{iid}/revoke"), json!({}), &c.admin).await;
-    body["username"] = json!("bruno");
+    body["first_name"] = json!("bruno");
     let (s, _, _) = send(&c.app, Method::POST, "/api/join", Some(body), &[]).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 
@@ -494,7 +494,7 @@ async fn nerd_changes_wait_for_approval() {
     assert_eq!(s, StatusCode::CONFLICT, "si decide una volta sola");
 
     let ev = c.eventi(&alunno).await.remove(0);
-    assert_eq!((ev["created_by"]["name"].clone(), ev["approved_by"].is_string()), (json!("Lorenzo"), true));
+    assert_eq!((ev["created_by"]["name"].clone(), ev["approved_by"].is_string()), (json!("luca Prova"), true));
     assert_eq!(c.get("/api/inbox", &nerd).await.1["items"][0]["payload"]["outcome"], "approved");
     let id = ev["id"].as_str().unwrap().to_owned();
 
@@ -846,6 +846,148 @@ async fn work_groups_are_temporary_private_and_led_by_their_leader() {
     assert_eq!(c.post(&format!("/api/work-groups/{other}/delete"), json!({}), &rap).await.0, StatusCode::OK);
 }
 
+#[tokio::test]
+async fn people_sign_in_with_name_and_surname() {
+    let c = Classe::nuova().await;
+    let mut body = setup_body("Niccolò", 3);
+    body["last_name"] = json!("  D'Amico  ");
+    let (_, inv) = c.post("/api/invites", json!({"group_id": c.group}), &c.admin).await;
+    body["code"] = inv["code"].clone();
+    assert_eq!(send(&c.app, Method::POST, "/api/join", Some(body.clone()), &[]).await.0, StatusCode::OK);
+    body["first_name"] = json!("niccolo");
+    body["last_name"] = json!("damico");
+    assert_eq!(send(&c.app, Method::POST, "/api/join", Some(body.clone()), &[]).await.0, StatusCode::CONFLICT, "accenti e apostrofi non distinguono");
+    body["first_name"] = json!("n1ccolo");
+    assert_eq!(send(&c.app, Method::POST, "/api/join", Some(body), &[]).await.0, StatusCode::BAD_REQUEST);
+    let (_, list) = c.get("/api/users", &c.admin).await;
+    assert_eq!(list["pending"][0]["display_name"], "Niccolò D'Amico");
+    let id = list["pending"][0]["id"].as_str().unwrap().to_owned();
+    c.post(&format!("/api/users/{id}/accept"), json!({}), &c.admin).await;
+    let (s, h, b) = send(&c.app, Method::POST, "/api/auth/login", Some(json!({"username":"NICCOLO  D’Amico","auth_key":key(3)})), &[]).await;
+    assert_eq!(s, StatusCode::OK, "{b}");
+    let cookie = cookie_of(&h);
+
+    // Cambiando nome si entra con quello nuovo; non si puo' prendere quello di un altro.
+    let headers = [("cookie", cookie.as_str())];
+    let patch = |body: Value| send(&c.app, Method::PATCH, "/api/me", Some(body), &headers);
+    assert_eq!(patch(json!({"first_name":"admin","last_name":"Prova"})).await.0, StatusCode::CONFLICT);
+    assert_eq!(patch(json!({"first_name":"Nico"})).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(patch(json!({"first_name":"Nico","last_name":"Amico"})).await.0, StatusCode::OK);
+    let (s, _, _) = send(&c.app, Method::POST, "/api/auth/login", Some(json!({"username":"nico amico","auth_key":key(3)})), &[]).await;
+    assert_eq!(s, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn moderation_suspends_expels_and_asks_for_a_new_name() {
+    let c = Classe::nuova().await;
+    let (rid, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
+    let (aid, anna) = c.iscrivi("anna", "alunno", 3).await;
+    let (bid, _) = c.iscrivi("bruno", "alunno", 4).await;
+    let (_, nerd) = c.iscrivi("luca", "nerd", 5).await;
+    let act = |who: String, id: String, body: Value| {
+        let app = c.app.clone();
+        async move { send(&app, Method::POST, &format!("/api/users/{id}/sanction"), Some(body), &[("cookie", &who)]).await.0 }
+    };
+    let (_, me) = c.get("/api/me", &c.admin).await;
+    let admin_id = me["id"].as_str().unwrap().to_owned();
+    let stop = json!({"action":"sospendi","tags":["comportamento"],"reason":"Messaggi offensivi","days":2});
+
+    assert_eq!(act(nerd.clone(), aid.clone(), stop.clone()).await, StatusCode::FORBIDDEN);
+    assert_eq!(act(rap.clone(), admin_id, stop.clone()).await, StatusCode::NOT_FOUND, "l'admin non e' in classe");
+    assert_eq!(act(rap.clone(), rid.clone(), stop.clone()).await, StatusCode::FORBIDDEN, "non se stessi");
+    assert_eq!(act(rap.clone(), aid.clone(), json!({"action":"sospendi"})).await, StatusCode::BAD_REQUEST, "serve un motivo");
+    assert_eq!(act(rap.clone(), aid.clone(), json!({"action":"sospendi","tags":["boh"]})).await, StatusCode::BAD_REQUEST);
+    assert_eq!(act(rap.clone(), aid.clone(), stop.clone()).await, StatusCode::OK);
+    assert_eq!(c.get("/api/me", &anna).await.0, StatusCode::UNAUTHORIZED, "la sessione cade");
+
+    let login = |byte: u8| json!({"username":"anna prova","auth_key":key(byte)});
+    let (s, _, b) = send(&c.app, Method::POST, "/api/auth/login", Some(login(9)), &[]).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED, "senza password non si scopre nulla: {b}");
+    let (s, h, b) = send(&c.app, Method::POST, "/api/auth/login", Some(login(3)), &[]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert!(!h.contains_key(header::SET_COOKIE));
+    assert_eq!((b["blocked"]["kind"].clone(), b["blocked"]["reason"].clone(), b["blocked"]["tags"][0].clone()), (json!("sospeso"), json!("Messaggi offensivi"), json!("comportamento")));
+    assert!(b["blocked"]["until"].is_i64());
+    let (_, list) = c.get("/api/moderation", &rap).await;
+    assert!(list["users"].as_array().unwrap().iter().any(|u| u["id"] == aid.as_str() && u["block"]["kind"] == "sospeso"), "{list}");
+    assert_eq!(act(rap.clone(), aid.clone(), json!({"action":"riattiva"})).await, StatusCode::OK);
+    let (s, h, _) = send(&c.app, Method::POST, "/api/auth/login", Some(login(3)), &[]).await;
+    assert_eq!(s, StatusCode::OK);
+    let anna = cookie_of(&h);
+
+    // Un blocco dell'admin non lo tocca il rappresentante.
+    assert_eq!(act(c.admin.clone(), aid.clone(), json!({"action":"sospendi","tags":["altro"]})).await, StatusCode::OK);
+    assert_eq!(act(rap.clone(), aid.clone(), json!({"action":"riattiva"})).await, StatusCode::FORBIDDEN);
+    assert_eq!(act(c.admin.clone(), aid.clone(), json!({"action":"riattiva"})).await, StatusCode::OK);
+    let (_, h, _) = send(&c.app, Method::POST, "/api/auth/login", Some(login(3)), &[]).await;
+    let anna2 = cookie_of(&h);
+    assert_eq!(c.get("/api/me", &anna).await.0, StatusCode::UNAUTHORIZED);
+
+    // Nome da cambiare: fino ad allora si legge soltanto.
+    assert_eq!(act(rap.clone(), aid.clone(), json!({"action":"nome","tags":["nome"]})).await, StatusCode::OK);
+    let (s, me) = c.get("/api/me", &anna2).await;
+    assert_eq!((s, me["rename_request"]["tags"][0].clone()), (StatusCode::OK, json!("nome")));
+    let blob = json!({"visibility":"private","id":"0123456789abcdef0123456789abcdef","payload":B64.encode([7u8; 80])});
+    assert_eq!(c.post("/api/events", blob.clone(), &anna2).await.0, StatusCode::FORBIDDEN);
+    let headers = [("cookie", anna2.as_str())];
+    let patch = |body: Value| send(&c.app, Method::PATCH, "/api/me", Some(body), &headers);
+    assert_eq!(patch(json!({"first_name":"Anna","last_name":"Prova"})).await.0, StatusCode::BAD_REQUEST, "lo stesso nome non basta");
+    assert_eq!(patch(json!({"first_name":"Annalisa","last_name":"Prova"})).await.0, StatusCode::OK);
+    assert_eq!(c.post("/api/events", blob, &anna2).await.0, StatusCode::OK);
+
+    // Espulsione: fuori dalla classe e bloccato, con il motivo.
+    assert_eq!(act(rap.clone(), bid.clone(), json!({"action":"espelli","reason":"Account falso"})).await, StatusCode::OK);
+    let (s, _, b) = send(&c.app, Method::POST, "/api/auth/login", Some(json!({"username":"bruno prova","auth_key":key(4)})), &[]).await;
+    assert_eq!((s, b["blocked"]["kind"].clone()), (StatusCode::FORBIDDEN, json!("espulso")));
+    let (_, meta) = c.get("/api/meta", &rap).await;
+    assert!(meta["groups"][0]["members"].as_array().unwrap().iter().all(|m| m["id"] != bid.as_str()));
+    assert_eq!(act(rap.clone(), bid.clone(), json!({"action":"riattiva"})).await, StatusCode::NOT_FOUND, "non e' piu' della classe");
+}
+
+#[tokio::test]
+async fn temporary_suspensions_end_by_themselves() {
+    let c = Classe::nuova().await;
+    let (aid, _) = c.iscrivi("anna", "alunno", 3).await;
+    let uri = format!("/api/users/{aid}/sanction");
+    assert_eq!(c.post(&uri, json!({"action":"sospendi","tags":["altro"],"days":0}), &c.admin).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(c.post(&uri, json!({"action":"sospendi","tags":["altro"],"days":1}), &c.admin).await.0, StatusCode::OK);
+    let now = taskhit_server::ratelimit::now_secs() as i64;
+    let (_, list) = c.get("/api/moderation", &c.admin).await;
+    let until = list["users"].as_array().unwrap().iter().find(|u| u["id"] == aid.as_str()).unwrap()["block"]["until"].as_i64().unwrap();
+    assert!((until - now - 86_400).abs() < 60, "{until}");
+}
+
+#[tokio::test]
+async fn photos_are_checked_and_seen_only_by_classmates() {
+    let c = Classe::nuova().await;
+    let (aid, anna) = c.iscrivi("anna", "alunno", 3).await;
+    let (_, bruno) = c.iscrivi("bruno", "alunno", 4).await;
+    let (_, other) = c.post("/api/groups", json!({"name":"5C","kind":"classe"}), &c.admin).await;
+    let (cid, carla) = c.iscrivi("carla", "alunno", 5).await;
+    send(&c.app, Method::PATCH, &format!("/api/users/{cid}"), Some(json!({"group_ids":[other["id"]]})), &[("cookie", &c.admin)]).await;
+    let headers = [("cookie", anna.as_str())];
+    let put = |data: Vec<u8>| send(&c.app, Method::PUT, "/api/me/photo", Some(json!({"data": B64.encode(data)})), &headers);
+    assert_eq!(put(b"<svg onload=alert(1)>".to_vec()).await.0, StatusCode::BAD_REQUEST);
+    let mut big = vec![0xFF, 0xD8, 0xFF];
+    big.resize(160_000, 0);
+    assert_eq!(put(big).await.0, StatusCode::BAD_REQUEST);
+    assert_eq!(put(vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]).await.0, StatusCode::OK);
+
+    let uri = format!("/api/users/{aid}/photo");
+    let req = Request::builder().uri(&uri).header(header::HOST, "localhost").header("cookie", &bruno).body(Body::empty()).unwrap();
+    let res = c.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "image/jpeg");
+    assert!(res.headers()[header::CACHE_CONTROL].to_str().unwrap().starts_with("private"));
+    assert_eq!(c.get(&uri, &carla).await.0, StatusCode::NOT_FOUND, "di un'altra classe");
+    assert_eq!(send(&c.app, Method::GET, &uri, None, &[]).await.0, StatusCode::UNAUTHORIZED);
+    let (_, meta) = c.get("/api/meta", &bruno).await;
+    assert!(meta["groups"][0]["members"].as_array().unwrap().iter().any(|m| m["id"] == aid.as_str() && m["photo"].is_i64()));
+
+    assert_eq!(c.post(&format!("/api/users/{aid}/sanction"), json!({"action":"foto"}), &c.admin).await.0, StatusCode::OK);
+    assert_eq!(c.get(&uri, &bruno).await.0, StatusCode::NOT_FOUND);
+}
+
 // --- Backup e ripristino ---------------------------------------------------------------------
 
 async fn send_bytes(app: &Router, uri: &str, bytes: Vec<u8>, extra: &[(&str, &str)]) -> (StatusCode, Value) {
@@ -891,7 +1033,7 @@ async fn backup_now(app: &Router, cookie: &str) -> String {
 }
 
 async fn login_cookie(app: &Router) -> String {
-    let (s, h, body) = send(app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo","auth_key":key(1)})), &[]).await;
+    let (s, h, body) = send(app, Method::POST, "/api/auth/login", Some(json!({"username":"lorenzo prova","auth_key":key(1)})), &[]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
     cookie_of(&h)
 }

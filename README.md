@@ -25,6 +25,8 @@
 - **Eventi privati** cifrati sul dispositivo: nemmeno l'amministratore del server li riceve in chiaro.
 - **Ruoli**: l'admin gestisce solo il server (persone, ruoli, classi, backup) e non fa parte della classe; i rappresentanti gestiscono eventi, inviti, gruppi interni alla classe e plugin; le modifiche dei nerd aspettano la loro approvazione; gli alunni hanno eventi privati.
 - **Inbox** con aggiunte, modifiche ed eliminazioni degli eventi pubblici.
+- Si entra con **nome, cognome e password**; foto profilo visibile ai compagni.
+- **Moderazione**: sospensione (anche a tempo), espulsione e richiesta di cambiare nome, con motivo.
 - **Classi, gruppi e inviti** con conferma dell'amministratore o di un rappresentante.
 - **Gruppi di lavoro** temporanei (al massimo 90 giorni), composti dai rappresentanti trascinando i nomi: ognuno ha un capogruppo e i suoi eventi li vedono solo i membri.
 - **Temi** in un singolo file JSON, chiari e scuri.
