@@ -10,7 +10,7 @@ services:
 
   web:
     # Immagine fissata per digest: va aggiornata insieme al numero di versione a ogni release.
-    image: ghcr.io/tombino104/taskhit:0.5.0@sha256:cfcbebe66ddedec7fb33bdd326ffe954b2b2d91128af89b7413e265dbaf3abcf
+    image: ghcr.io/tombino104/taskhit:0.6.1@sha256:c88ac0d3594d8e60b4ad7f6691470c0756fc207f3fa6f105a618148840ab6f6a
     user: "1000:1000"
     restart: on-failure
     stop_grace_period: 15s
