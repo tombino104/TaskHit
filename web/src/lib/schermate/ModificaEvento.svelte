@@ -18,7 +18,7 @@
   const diritto = puoPubblicare(ruolo);
   const alunno = diritto === 'no';
   const gruppi = $derived(app.meta?.groups ?? []);
-  const gruppiMiei = untrack(() => app.meta?.groups.filter((g) => g.mine || ruolo === 'admin') ?? []);
+  const gruppiMiei = untrack(() => app.meta?.groups.filter((g) => g.mine) ?? []);
   const tipiPermessi = untrack(() => app.meta?.labels.filter((t) => !alunno || t.personal) ?? []);
   const predefinito = tipiPermessi[0];
 
@@ -45,7 +45,7 @@
   const proposta = $derived(!privato && diritto === 'proposta');
   const testi = $derived(
     privato ? { nota: alunno ? 'Come alunno puoi aggiungere interrogazioni ed eventi personali. Restano privati.' : 'Evento privato: lo vedi solo tu, anche offline.', cta: 'Salva evento' }
-    : proposta ? { nota: `Sei un Nerd: ${esistente ? 'la modifica sarà applicata' : 'l’evento sarà pubblicato'} quando un rappresentante o l’admin approva.`, cta: 'Invia per approvazione' }
+    : proposta ? { nota: `Sei un Nerd: ${esistente ? 'la modifica sarà applicata' : 'l’evento sarà pubblicato'} quando un rappresentante approva.`, cta: 'Invia per approvazione' }
     : { nota: 'L’evento sarà visibile subito al gruppo e comparirà nell’Inbox di tutti.', cta: esistente ? 'Salva modifiche' : 'Pubblica evento' },
   );
   const vietato = modo === 'modifica' && (!esistente || (!esistente.privato && alunno));
@@ -74,6 +74,19 @@
       avvisa(esito === 'proposed' ? 'Proposta inviata.' : esito === 'published' ? 'Evento pubblicato.' : 'Evento salvato.');
       if (modo === 'modifica') indietro('oggi'); else sostituisci(`calendario/${giorno}`);
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
+  }
+
+  // --- Nuovo tipo ---
+  let nuovoTipo = $state(false);
+  let nomeTipo = $state('');
+  let erroreTipo = $state('');
+  async function creaTipo(ev: SubmitEvent) {
+    ev.preventDefault(); erroreTipo = '';
+    try {
+      const { id } = await api.creaTipo(nomeTipo);
+      await sincronizza();
+      scegliTipo(id); nomeTipo = ''; nuovoTipo = false;
+    } catch (e) { erroreTipo = messaggio(e); }
   }
 
   // --- Nuova materia ---
@@ -112,6 +125,9 @@
           {#each app.meta?.labels ?? [] as t (t.id)}
             <button type="button" role="radio" class="scelta tipo" aria-checked={tipo === t.id} disabled={alunno && !t.personal} onclick={() => scegliTipo(t.id)}>{t.name}</button>
           {/each}
+          {#if diritto === 'diretto'}
+            <button type="button" class="scelta nuova" onclick={() => (nuovoTipo = true)}>+ Nuovo tipo</button>
+          {/if}
         </div>
         {#if scelto?.subs.length}
           <div role="radiogroup" aria-label="Modalità" class="modi">
@@ -221,6 +237,16 @@
 </div>
 
 <Sblocco bind:aperto={sblocco} riga={false} />
+
+{#if nuovoTipo}
+  <Foglio titolo="Nuovo tipo" onclose={() => (nuovoTipo = false)}>
+    <form class="breve" onsubmit={creaTipo}>
+      <label class="campo"><span class="dato">Nome</span><input bind:value={nomeTipo} required maxlength="40" /></label>
+      {#if erroreTipo}<p class="errore" role="alert">{erroreTipo}</p>{/if}
+      <button class="pulsante pieno grande">Aggiungi tipo</button>
+    </form>
+  </Foglio>
+{/if}
 
 {#if nuovaMateria}
   <Foglio titolo="Nuova materia" onclose={() => (nuovaMateria = false)}>

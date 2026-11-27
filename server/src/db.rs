@@ -13,6 +13,7 @@ use std::{
 const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/001_init.sql"),
     include_str!("../migrations/002_calendario.sql"),
+    include_str!("../migrations/003_admin_fuori_dalla_classe.sql"),
 ];
 
 /// Versione dello schema che questa build conosce.
@@ -78,4 +79,33 @@ pub fn migrate(conn: &mut Connection) -> anyhow::Result<()> {
         tracing::info!("migrazione {} applicata", i + 1);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upgrading_takes_the_admin_out_of_the_class() {
+        let mut c = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..2] {
+            c.execute_batch(sql).unwrap();
+        }
+        c.pragma_update(None, "user_version", 2).unwrap();
+        c.execute_batch(
+            "INSERT INTO users (id, username, display_name, role, auth_hash, kdf_salt, wrapped_key, created_at, updated_at)
+             VALUES ('a','admin','A','admin','h','s','w',0,0), ('r','rap','R','rappresentante','h','s','w',0,0);
+             INSERT INTO groups (id, name, kind, created_at) VALUES ('g','4B','classe',0);
+             INSERT INTO group_members (group_id, user_id) VALUES ('g','a'), ('g','r');
+             INSERT INTO events (id, visibility, owner_id, group_id, title, starts_at, subject_id, created_by, created_at, updated_by, updated_at)
+             VALUES ('e','public','a','g','Compito',1,'a','a',0,'a',0);",
+        )
+        .unwrap();
+        migrate(&mut c).unwrap();
+        let one = |sql: &str| c.query_row(sql, [], |r| r.get::<_, i64>(0)).unwrap();
+        assert_eq!(one("SELECT COUNT(*) FROM group_members WHERE user_id = 'a'"), 0);
+        assert_eq!(one("SELECT COUNT(*) FROM group_members WHERE user_id = 'r'"), 1);
+        // L'evento gia' pubblicato resta alla classe, senza riferimento all'admin.
+        assert_eq!(one("SELECT COUNT(*) FROM events WHERE id = 'e' AND subject_id IS NULL"), 1);
+    }
 }

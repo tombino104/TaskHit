@@ -100,7 +100,14 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
                 }
                 common::audit(&tx, &user.id, if disabled { "user_disabled" } else { "user_enabled" }, Some(&id))?;
             }
-            if let Some(groups) = &req.group_ids {
+            // L'admin non fa parte della classe: perde i gruppi e non ne puo' ricevere.
+            let admin = common::exists(&tx, "SELECT 1 FROM users WHERE id = ?1 AND role = 'admin'", &id)?;
+            if admin {
+                tx.execute("DELETE FROM group_members WHERE user_id = ?1", params![id])?;
+                tx.execute("UPDATE events SET subject_id = NULL WHERE subject_id = ?1", params![id])?;
+                tx.execute("DELETE FROM inbox WHERE user_id = ?1", params![id])?;
+            }
+            if let Some(groups) = req.group_ids.as_ref().filter(|_| !admin) {
                 tx.execute("DELETE FROM group_members WHERE user_id = ?1", params![id])?;
                 for g in groups {
                     if !common::exists(&tx, "SELECT 1 FROM groups WHERE id = ?1", g)? {
@@ -161,7 +168,7 @@ struct GroupReq {
     kind: String,
 }
 
-/// I gruppi li crea solo l'admin. L'admin entra subito nel gruppo che crea.
+/// I gruppi li crea solo l'admin, che pero' non ne fa parte.
 async fn create_group(State(st): State<AppState>, user: AuthUser, Json(req): Json<GroupReq>) -> Result<Json<Value>, ApiError> {
     common::require_admin(&user)?;
     let name = common::required_text(&req.name, 40, "il nome del gruppo deve avere da 1 a 40 caratteri")?;
@@ -177,7 +184,6 @@ async fn create_group(State(st): State<AppState>, user: AuthUser, Json(req): Jso
                 return Err(ApiError::Conflict("esiste gia' un gruppo con questo nome"));
             }
             tx.execute("INSERT INTO groups (id, name, kind, created_at) VALUES (?1, ?2, ?3, ?4)", params![gid, name, req.kind, now()])?;
-            tx.execute("INSERT INTO group_members (group_id, user_id) VALUES (?1, ?2)", params![gid, user.id])?;
             common::audit(&tx, &user.id, "group_created", Some(&gid))?;
             tx.commit()?;
             Ok(())

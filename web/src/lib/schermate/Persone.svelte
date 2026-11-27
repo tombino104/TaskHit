@@ -44,8 +44,8 @@
   const conta = (r: Filtro) => (r === 'tutti' ? persone.length : persone.filter((p) => p.role === r).length);
   const FILTRI: [Filtro, string][] = [['tutti', 'Tutti'], ['admin', 'Admin'], ['rappresentante', 'Rappr.'], ['nerd', 'Nerd'], ['alunno', 'Alunni']];
   const DESCRIZIONI: Record<Ruolo, string> = {
-    admin: 'Admin: la parte tecnica. Utenti, gruppi, plugin, temi e backup.',
-    rappresentante: 'Rappresentanti: gestiscono gli eventi pubblici e approvano le proposte dei Nerd.',
+    admin: 'Admin: solo la parte tecnica. Utenti, gruppi, plugin, temi e backup. Non fa parte della classe e non vede il calendario.',
+    rappresentante: 'Rappresentanti: gestiscono eventi pubblici, materie e tipi e approvano le proposte dei Nerd. Non toccano la parte tecnica.',
     nerd: 'Nerd: aiutano i rappresentanti. Le loro modifiche agli eventi pubblici vanno approvate.',
     alunno: 'Alunni: aggiungono interrogazioni ed eventi personali. Non propongono modifiche.',
   };
@@ -59,7 +59,7 @@
   const io = $derived(scelta?.id === app.utente?.id);
   async function salva() {
     const p = scelta!;
-    if (await esegui(() => api.salvaPersona(p.id, { role: io ? undefined : ruolo, group_ids: $state.snapshot(suoi) }), 'Salvato.')) scelta = null;
+    if (await esegui(() => api.salvaPersona(p.id, { role: io ? undefined : ruolo, group_ids: ruolo === 'admin' ? undefined : $state.snapshot(suoi) }), 'Salvato.')) scelta = null;
   }
   async function attiva(si: boolean) {
     const p = scelta!;
@@ -82,7 +82,7 @@
   function invita() { scheda = 'inviti'; }
 </script>
 
-<div class="schermata persone">
+<div class="schermata con-menu persone">
   <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
   <span class="dato occhio">Pannello admin</span>
   <header>
@@ -116,7 +116,7 @@
           <Avatar nome={p.display_name} tono={p.role === 'admin' ? 'pieno' : p.role === 'rappresentante' ? 'tenue' : 'neutro'} />
           <span class="voce chi">
             <span>{p.display_name}</span>
-            <span class="tenue">{p.disabled ? 'Disattivato · ' : ''}{p.role === 'admin' && !p.group_ids.length ? 'Tutti i gruppi' : nomiGruppi(p.group_ids)}</span>
+            <span class="tenue">{p.disabled ? 'Disattivato · ' : ''}{p.role === 'admin' ? 'Gestione del server' : nomiGruppi(p.group_ids)}</span>
           </span>
           <button type="button" class="cambia" aria-label="Cambia ruolo e gruppi di {p.display_name}" onclick={() => apri(p)}>
             {NOMI_RUOLO[p.role].toUpperCase()}<Icona nome="giu" size={14} />
@@ -187,14 +187,18 @@
       </div>
       <p class="nota spiega">{io ? 'Non puoi cambiare il tuo ruolo.' : DESCRIZIONI[ruolo]}</p>
     </fieldset>
-    <fieldset>
-      <legend class="dato">Gruppi</legend>
-      {#each gruppi as g (g.id)}
-        <label class="spunta"><input type="checkbox" checked={suoi.includes(g.id)} onchange={() => (suoi = commuta(suoi, g.id))} /><span>{g.name}</span></label>
-      {:else}
-        <p class="nota">Nessun gruppo ancora.</p>
-      {/each}
-    </fieldset>
+    {#if ruolo !== 'admin'}
+      <fieldset>
+        <legend class="dato">Gruppi</legend>
+        {#each gruppi as g (g.id)}
+          <label class="spunta"><input type="checkbox" checked={suoi.includes(g.id)} onchange={() => (suoi = commuta(suoi, g.id))} /><span>{g.name}</span></label>
+        {:else}
+          <p class="nota">Nessun gruppo ancora.</p>
+        {/each}
+      </fieldset>
+    {:else if scelta.role !== 'admin'}
+      <p class="nota">Salvando, esce da tutti i gruppi e non vede più il calendario, nemmeno i propri eventi privati.</p>
+    {/if}
     <button type="button" class="pulsante pieno grande" onclick={salva}>Salva</button>
     {#if !io}
       <button type="button" class="pulsante" onclick={() => attiva(scelta!.disabled)}>{scelta.disabled ? 'Riattiva account' : 'Disattiva account'}</button>

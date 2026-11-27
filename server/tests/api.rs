@@ -536,9 +536,9 @@ async fn private_events_are_opaque_and_owner_only() {
     assert_eq!(c.eventi(&anna).await[0]["payload"], json!(blob));
     assert!(c.eventi(&c.admin).await.is_empty(), "nemmeno l'admin lo riceve");
     let uri = format!("/api/events/{id}");
-    assert_eq!(c.get(&format!("{uri}/history"), &c.admin).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(c.get(&format!("{uri}/history"), &c.admin).await.0, StatusCode::FORBIDDEN);
     let (s, _) = c.post(&format!("{uri}/delete"), json!({"rev":1}), &c.admin).await;
-    assert_eq!(s, StatusCode::NOT_FOUND);
+    assert_eq!(s, StatusCode::FORBIDDEN);
     assert_eq!(c.get("/api/inbox", &c.admin).await.1["items"].as_array().unwrap().len(), 0, "nessuna notifica");
 
     let (s, _) = c.post(&format!("{uri}/delete"), json!({"rev":1}), &anna).await;
@@ -554,7 +554,10 @@ async fn groups_isolate_public_events() {
     let altro = g["id"].as_str().unwrap().to_owned();
     let body = json!({"visibility":"public","data":{"group_id":altro,"title":"Modulo 3","starts_at":1_795_500_000}});
     assert_eq!(c.post("/api/events", body.clone(), &rap).await.0, StatusCode::FORBIDDEN);
-    let (_, made) = c.post("/api/events", body, &c.admin).await;
+    let (mid, marco) = c.iscrivi("marco", "rappresentante", 3).await;
+    send(&c.app, Method::PATCH, &format!("/api/users/{mid}"), Some(json!({"group_ids":[altro]})), &[("cookie", &c.admin)]).await;
+    let (s, made) = c.post("/api/events", body, &marco).await;
+    assert_eq!(s, StatusCode::OK, "{made}");
     assert!(c.eventi(&rap).await.is_empty(), "chi non fa parte del gruppo non vede l'evento");
     let uri = format!("/api/events/{}/history", made["id"].as_str().unwrap());
     assert_eq!(c.get(&uri, &rap).await.0, StatusCode::NOT_FOUND);
@@ -569,6 +572,7 @@ async fn groups_isolate_public_events() {
 #[tokio::test]
 async fn event_fields_are_validated() {
     let c = Classe::nuova().await;
+    let (_, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
     let ok = c.evento("Prova")["data"].clone();
     for (field, bad) in [
         ("title", json!("   ")),
@@ -580,11 +584,71 @@ async fn event_fields_are_validated() {
     ] {
         let mut data = ok.clone();
         data[field] = bad;
-        let (s, b) = c.post("/api/events", json!({"visibility":"public","data":data}), &c.admin).await;
+        let (s, b) = c.post("/api/events", json!({"visibility":"public","data":data}), &rap).await;
         assert_eq!(s, StatusCode::BAD_REQUEST, "campo {field}: {b}");
     }
-    let (s, _) = c.post("/api/tags", json!({"name":"Fisica","color":"red"}), &c.admin).await;
+    let (s, _) = c.post("/api/tags", json!({"name":"Fisica","color":"red"}), &rap).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn the_admin_runs_the_server_and_stays_out_of_the_class() {
+    let c = Classe::nuova().await;
+    let (_, me) = c.get("/api/me", &c.admin).await;
+    let admin_id = me["id"].as_str().unwrap().to_owned();
+    let (rid, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
+    let (_, nerd) = c.iscrivi("luca", "nerd", 3).await;
+
+    // Non compare tra i membri, nemmeno del gruppo che ha creato.
+    let (_, meta) = c.get("/api/meta", &rap).await;
+    let members = meta["groups"][0]["members"].as_array().unwrap();
+    assert!(members.len() == 2 && members.iter().all(|m| m["role"] != "admin"), "{members:?}");
+    let (_, meta) = c.get("/api/meta", &c.admin).await;
+    assert_eq!(meta["groups"][0]["mine"], false, "vede il gruppo per gestirlo, senza farne parte");
+
+    // Niente eventi, materie, tipi o proposte.
+    let private = json!({"visibility":"private","id":"0123456789abcdef0123456789abcdef","payload":B64.encode([7u8; 80])});
+    for (uri, body) in [
+        ("/api/events", c.evento("No")),
+        ("/api/events", private),
+        ("/api/tags", json!({"name":"Fisica","color":"#112233"})),
+        ("/api/labels", json!({"name":"Gita"})),
+    ] {
+        let (s, b) = c.post(uri, body, &c.admin).await;
+        assert_eq!(s, StatusCode::FORBIDDEN, "{uri}: {b}");
+    }
+    let (_, made) = c.post("/api/events", c.evento("Compito"), &rap).await;
+    assert!(c.eventi(&c.admin).await.is_empty(), "il calendario non e' affare dell'admin");
+    let (s, _) = c.post(&format!("/api/events/{}/delete", made["id"].as_str().unwrap()), json!({"rev":1}), &c.admin).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (_, proposal) = c.post("/api/events", c.evento("Gita"), &nerd).await;
+    let decide = format!("/api/proposals/{}/decide", proposal["id"].as_str().unwrap());
+    assert_eq!(c.post(&decide, json!({"approve":true}), &c.admin).await.0, StatusCode::FORBIDDEN);
+    assert!(c.get("/api/proposals", &c.admin).await.1["proposals"].as_array().unwrap().is_empty());
+    assert!(c.get("/api/inbox", &c.admin).await.1["items"].as_array().unwrap().is_empty(), "nessuna notifica sugli eventi");
+
+    // Non puo' essere l'alunno di un evento.
+    let mut body = c.evento("Interrogazione");
+    body["data"]["subject_id"] = json!(admin_id);
+    assert_eq!(c.post("/api/events", body, &rap).await.0, StatusCode::BAD_REQUEST);
+
+    // Il rappresentante cura i contenuti, non l'impianto.
+    for (uri, body) in [("/api/tags", json!({"name":"Fisica","color":"#112233"})), ("/api/labels", json!({"name":"Gita"}))] {
+        assert_eq!(c.post(uri, body, &rap).await.0, StatusCode::OK, "{uri}");
+    }
+    let plugin = json!({"scope":"instance","enabled":false});
+    let (s, _, _) = send(&c.app, Method::PUT, "/api/plugins/grafico", Some(plugin.clone()), &[("cookie", &rap)]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, _, _) = send(&c.app, Method::PUT, "/api/plugins/grafico", Some(plugin), &[("cookie", &c.admin)]).await;
+    assert_eq!(s, StatusCode::OK);
+
+    // Chi diventa admin esce dalla classe, anche se la richiesta indica ancora i gruppi.
+    let (s, _, _) = send(&c.app, Method::PATCH, &format!("/api/users/{rid}"), Some(json!({"role":"admin","group_ids":[c.group]})), &[("cookie", &c.admin)]).await;
+    assert_eq!(s, StatusCode::OK);
+    let (_, list) = c.get("/api/users", &c.admin).await;
+    let giulia = list["users"].as_array().unwrap().iter().find(|u| u["id"] == rid.as_str()).unwrap().clone();
+    assert_eq!(giulia["group_ids"], json!([]));
+    assert!(c.eventi(&rap).await.is_empty());
 }
 
 // --- Backup e ripristino ---------------------------------------------------------------------
@@ -613,14 +677,15 @@ async fn admin_cookie(app: &Router) -> String {
     cookie_of(&h)
 }
 
-async fn tag_names(app: &Router, cookie: &str) -> Vec<String> {
+/// Dati di prova per i backup: gruppi, che l'admin puo' creare.
+async fn group_names(app: &Router, cookie: &str) -> Vec<String> {
     let (s, _, meta) = send(app, Method::GET, "/api/meta", None, &[("cookie", cookie)]).await;
     assert_eq!(s, StatusCode::OK, "{meta}");
-    meta["tags"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect()
+    meta["groups"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap().to_owned()).collect()
 }
 
-async fn add_tag(app: &Router, cookie: &str, name: &str) {
-    let (s, _, body) = send(app, Method::POST, "/api/tags", Some(json!({"name": name, "color": "#112233"})), &[("cookie", cookie)]).await;
+async fn add_group(app: &Router, cookie: &str, name: &str) {
+    let (s, _, body) = send(app, Method::POST, "/api/groups", Some(json!({"name": name, "kind": "gruppo"})), &[("cookie", cookie)]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
 }
 
@@ -640,17 +705,17 @@ async fn login_cookie(app: &Router) -> String {
 async fn backup_and_restore_bring_data_back() {
     let (app, dir) = app(|_| {});
     let cookie = admin_cookie(&app).await;
-    add_tag(&app, &cookie, "Prima").await;
+    add_group(&app, &cookie, "Prima").await;
     std::fs::write(dir.join("themes/mio.json"), b"{\"nome\":\"Mio\"}").unwrap();
     let name = backup_now(&app, &cookie).await;
-    add_tag(&app, &cookie, "Dopo").await;
+    add_group(&app, &cookie, "Dopo").await;
     std::fs::remove_file(dir.join("themes/mio.json")).unwrap();
 
     // Senza la password giusta non si ripristina nulla.
     let uri = format!("/api/backups/{name}/restore");
     let (s, _, _) = send(&app, Method::POST, &uri, Some(json!({"auth_key":key(9)})), &[("cookie", &cookie)]).await;
     assert_eq!(s, StatusCode::FORBIDDEN);
-    assert!(tag_names(&app, &cookie).await.contains(&"Dopo".to_owned()));
+    assert!(group_names(&app, &cookie).await.contains(&"Dopo".to_owned()));
 
     let (s, _, body) = send(&app, Method::POST, &uri, Some(json!({"auth_key":key(1)})), &[("cookie", &cookie)]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
@@ -658,13 +723,13 @@ async fn backup_and_restore_bring_data_back() {
     assert_eq!(s, StatusCode::UNAUTHORIZED, "dopo il ripristino si accede di nuovo");
 
     let cookie = login_cookie(&app).await;
-    let tags = tag_names(&app, &cookie).await;
+    let tags = group_names(&app, &cookie).await;
     assert!(tags.contains(&"Prima".to_owned()) && !tags.contains(&"Dopo".to_owned()), "{tags:?}");
     assert!(dir.join("themes/mio.json").exists(), "tornano anche i temi");
     // La copia di sicurezza contiene lo stato di prima del ripristino, e il database resta scrivibile.
     let (_, _, list) = send(&app, Method::GET, "/api/backups", None, &[("cookie", &cookie)]).await;
     assert!(list["items"].as_array().unwrap().iter().any(|i| i["name"] == body["safety"] && i["kind"] == "sicurezza"), "{list}");
-    add_tag(&app, &cookie, "Ancora").await;
+    add_group(&app, &cookie, "Ancora").await;
     let leftovers = std::fs::read_dir(&dir).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().starts_with(".lavoro-")).count();
     assert_eq!(leftovers, 0, "nessun file di lavoro con le chiavi lasciato in giro");
 }
@@ -673,7 +738,7 @@ async fn backup_and_restore_bring_data_back() {
 async fn a_downloaded_backup_restores_a_fresh_install() {
     let (old, _d1) = app(|_| {});
     let cookie = admin_cookie(&old).await;
-    add_tag(&old, &cookie, "Salvata").await;
+    add_group(&old, &cookie, "Salvata").await;
     let name = backup_now(&old, &cookie).await;
     let (s, bytes) = download(&old, &name, &cookie).await;
     assert_eq!(s, StatusCode::OK);
@@ -690,7 +755,7 @@ async fn a_downloaded_backup_restores_a_fresh_install() {
     let (s, body) = send_bytes(&new, "/api/setup/restore", bytes.clone(), &[]).await;
     assert_eq!(s, StatusCode::OK, "{body}");
     let cookie = login_cookie(&new).await;
-    assert!(tag_names(&new, &cookie).await.contains(&"Salvata".to_owned()));
+    assert!(group_names(&new, &cookie).await.contains(&"Salvata".to_owned()));
     let (s, _) = send_bytes(&new, "/api/setup/restore", bytes.clone(), &[]).await;
     assert_eq!(s, StatusCode::CONFLICT, "solo su un'installazione vuota");
 
@@ -701,7 +766,7 @@ async fn a_downloaded_backup_restores_a_fresh_install() {
     cfg.security.cookie_secure = false;
     let again = router(build_state(cfg).expect("riapertura"));
     let cookie = login_cookie(&again).await;
-    assert!(tag_names(&again, &cookie).await.contains(&"Salvata".to_owned()));
+    assert!(group_names(&again, &cookie).await.contains(&"Salvata".to_owned()));
     let (s, item) = send_bytes(&again, "/api/backups/upload", bytes, &[("cookie", &cookie)]).await;
     assert_eq!((s, item["kind"].clone()), (StatusCode::OK, json!("caricato")), "{item}");
 }

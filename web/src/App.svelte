@@ -70,10 +70,14 @@
     if (fase === 'pronta' && !app.utente && !kdf && app.online) api.setupStatus().then((s) => (kdf = s.kdf)).catch(() => {});
   });
 
-  const conMenu = $derived(['oggi', 'calendario', 'inbox', 'profilo', 'cerca'].includes(rotta.nome));
-  const soloAdmin = $derived(['persone', 'backup'].includes(rotta.nome) && app.utente?.role !== 'admin');
-  const sconosciuta = $derived(!['oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'profilo', 'aspetto', 'plugin', 'persone', 'backup', 'cerca'].includes(rotta.nome));
-  $effect(() => { if (fase === 'pronta' && app.utente && (soloAdmin || sconosciuta)) sostituisci('oggi'); });
+  // L'admin gestisce l'impianto e non ha un calendario: le due parti dell'app non si sovrappongono.
+  const COMUNI = ['profilo', 'aspetto', 'plugin'];
+  const DELLA_CLASSE = [...COMUNI, 'oggi', 'calendario', 'evento', 'nuovo', 'modifica', 'inbox', 'approvazioni', 'cerca'];
+  const DELL_ADMIN = [...COMUNI, 'persone', 'backup'];
+  const admin = $derived(app.utente?.role === 'admin');
+  const permessa = $derived((admin ? DELL_ADMIN : DELLA_CLASSE).includes(rotta.nome));
+  const conMenu = $derived((admin ? ['persone', 'backup', 'profilo'] : ['oggi', 'calendario', 'inbox', 'profilo', 'cerca']).includes(rotta.nome));
+  $effect(() => { if (fase === 'pronta' && app.utente && !permessa) sostituisci(admin ? 'persone' : 'oggi'); });
 </script>
 
 {#if !cifraturaDisponibile}
@@ -88,7 +92,8 @@
   <div class="app">
     <Barra />
     <main>
-      {#if rotta.nome === 'oggi'}<Oggi />
+      {#if !permessa}<!-- si sta passando alla pagina giusta -->
+      {:else if rotta.nome === 'oggi'}<Oggi />
       {:else if rotta.nome === 'calendario'}<Calendario />
       {:else if rotta.nome === 'evento'}<Evento />
       {:else if rotta.nome === 'nuovo' || rotta.nome === 'modifica'}
@@ -99,8 +104,8 @@
       {:else if rotta.nome === 'profilo'}<Profilo />
       {:else if rotta.nome === 'aspetto'}<Aspetto />
       {:else if rotta.nome === 'plugin'}<Plugin />
-      {:else if rotta.nome === 'persone' && !soloAdmin}<Persone />
-      {:else if rotta.nome === 'backup' && !soloAdmin}<Backup />
+      {:else if rotta.nome === 'persone'}<Persone />
+      {:else if rotta.nome === 'backup'}<Backup />
       {:else if rotta.nome === 'cerca'}<Cerca />
       {/if}
     </main>

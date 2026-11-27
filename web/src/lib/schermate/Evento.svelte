@@ -95,7 +95,7 @@
       <h1>{evento.title}</h1>
 
       {#if evento.proposed}
-        <p class="errore">Hai proposto una modifica: aspetta l'approvazione di un rappresentante o dell'admin.</p>
+        <p class="errore">Hai proposto una modifica: aspetta l'approvazione di un rappresentante.</p>
       {/if}
 
       <div class="autore">
@@ -172,7 +172,7 @@
   {:else if foglio === 'elimina'}
     <Foglio titolo={diritto === 'proposta' ? 'Proponi di eliminare' : 'Eliminare?'} onclose={() => { foglio = ''; errore = ''; }}>
       <p class="lede">«{evento.title}», {dataLunga(inizio).toLowerCase()}.
-        {diritto === 'proposta' ? 'L’evento resta finché un rappresentante o l’admin approva.' : evento.privato ? 'Il contenuto cifrato viene cancellato e non si può recuperare.' : 'Chi fa parte del gruppo riceve una notifica. Non si può annullare.'}</p>
+        {diritto === 'proposta' ? 'L’evento resta finché un rappresentante approva.' : evento.privato ? 'Il contenuto cifrato viene cancellato e non si può recuperare.' : 'Chi fa parte del gruppo riceve una notifica. Non si può annullare.'}</p>
       {#if diritto === 'proposta'}
         <label class="campo"><span class="dato">Nota per chi approva · facoltativa</span><input bind:value={nota} maxlength="300" placeholder={maiuscola('perché va eliminato?')} /></label>
       {/if}

@@ -25,18 +25,11 @@ pub fn routes() -> Router<AppState> {
         .route("/inbox/read", post(mark_read))
 }
 
-/// Gruppi che l'utente puo' vedere; `None` = tutti (admin).
-fn my_groups(c: &Connection, u: &AuthUser) -> Result<Option<HashSet<String>>, ApiError> {
-    if u.role == "admin" {
-        return Ok(None);
-    }
+/// Gruppi di cui l'utente fa parte (l'admin non ne ha).
+fn my_groups(c: &Connection, u: &AuthUser) -> Result<HashSet<String>, ApiError> {
     let mut stmt = c.prepare("SELECT group_id FROM group_members WHERE user_id = ?1")?;
     let ids = stmt.query_map(params![u.id], |r| r.get::<_, String>(0))?.collect::<Result<HashSet<_>, _>>()?;
-    Ok(Some(ids))
-}
-
-fn allowed(groups: &Option<HashSet<String>>, group_id: &str) -> bool {
-    groups.as_ref().is_none_or(|g| g.contains(group_id))
+    Ok(ids)
 }
 
 /// Per chi approva: le proposte in attesa dei propri gruppi. Per un nerd: le proprie.
@@ -60,7 +53,7 @@ fn pending(c: &Connection, u: &AuthUser) -> Result<Vec<Value>, ApiError> {
     let mut out = vec![];
     for (id, kind, event_id, base_rev, data, note, created_at, by_id, by_name, by_role) in rows {
         let Ok(data) = serde_json::from_str::<Data>(&data) else { continue };
-        let visible = if right == Publish::Direct { allowed(&groups, &data.group_id) } else { by_id == u.id };
+        let visible = if right == Publish::Direct { groups.contains(&data.group_id) } else { by_id == u.id };
         if !visible {
             continue;
         }
@@ -69,7 +62,7 @@ fn pending(c: &Connection, u: &AuthUser) -> Result<Vec<Value>, ApiError> {
             None => None,
         };
         // Un rappresentante non vede una modifica di un evento che appartiene a un gruppo non suo.
-        if right == Publish::Direct && current.as_ref().and_then(|e| e.data.as_ref()).is_some_and(|d| !allowed(&groups, &d.group_id)) {
+        if right == Publish::Direct && current.as_ref().and_then(|e| e.data.as_ref()).is_some_and(|d| !groups.contains(&d.group_id)) {
             continue;
         }
         let stale = current.as_ref().is_some_and(|e| e.deleted || Some(e.rev) != base_rev);
@@ -94,7 +87,7 @@ struct DecideReq {
 
 async fn decide(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<DecideReq>) -> Result<Json<Value>, ApiError> {
     if common::publish_right(&user.role) != Publish::Direct {
-        return Err(ApiError::Forbidden("solo rappresentanti e admin decidono sulle proposte"));
+        return Err(ApiError::Forbidden("solo i rappresentanti decidono sulle proposte"));
     }
     st.db
         .run(move |c| {
@@ -193,7 +186,7 @@ async fn inbox(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>
             for (id, kind, event_id, at, read, payload, actor) in rows {
                 let payload: Value = payload.and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(Value::Null);
                 // Chi e' uscito da un gruppo non ne rilegge le vecchie notifiche.
-                if kind != "decision" && !allowed(&groups, payload["event"]["group_id"].as_str().unwrap_or("")) {
+                if kind != "decision" && !groups.contains(payload["event"]["group_id"].as_str().unwrap_or("")) {
                     continue;
                 }
                 if !read {

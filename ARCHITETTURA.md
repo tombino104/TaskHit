@@ -69,7 +69,7 @@ Per la consultazione offline il browser conserva in `localStorage` l'ultima risp
 5. **L'IP del client viene da `cf-connecting-ip`.** Se il server è raggiungibile anche dalla LAN senza tunnel, chi si collega direttamente può falsificarlo e aggirare solo il *proprio* limite per IP; il limite per nome utente resta.
 6. **La difesa DDoS vera è Cloudflare.** Il server aggiunge solo limiti locali e load shedding.
 7. **Non esistono ancora** reimpostazione password, cambio password o rotazione della chiave di recupero (in roadmap). Si possono invece chiudere le sessioni sugli altri dispositivi.
-8. L'admin vede gli eventi **pubblici** di tutti i gruppi; non riceve mai quelli privati degli altri.
+8. L'admin gestisce solo l'impianto: non fa parte di alcun gruppo, non riceve eventi né notifiche e non può scriverne. Chi in classe fa anche l'admin usa due account.
 
 ## 4. Dati
 
@@ -124,10 +124,12 @@ Schema in `server/migrations/` (`001_init.sql`, `002_calendario.sql`; applicate 
 
 | | Admin | Rappresentanti | Nerd | Alunni |
 |---|---|---|---|---|
-| Creare gruppi, gestire utenti, backup, plugin per tutti | ✓ | — | — | — |
-| Approvare/rifiutare proposte | ✓ | ✓ | — | — |
-| Modificare eventi pubblici direttamente | ✓ | ✓ | proposta da approvare | — |
-| Interrogazioni ed eventi personali | ✓ | ✓ | ✓ | ✓ |
+| Gruppi, persone, inviti, plugin per tutti, backup | ✓ | — | — | — |
+| Fare parte della classe e vedere il calendario | — | ✓ | ✓ | ✓ |
+| Materie e tipi di evento | — | ✓ | — | — |
+| Approvare/rifiutare proposte | — | ✓ | — | — |
+| Modificare eventi pubblici direttamente | — | ✓ | proposta da approvare | — |
+| Interrogazioni ed eventi personali | — | ✓ | ✓ | ✓ |
 | Proporre modifiche agli eventi pubblici | — | — | ✓ | non può |
 
 I permessi si applicano **sul server** (mai solo nell'interfaccia). Rappresentanti e nerd agiscono solo sui gruppi di cui fanno parte. La visibilità di un evento non si cambia dopo la creazione. Accessi, ruoli, gruppi, inviti e decisioni sulle proposte vanno nell'`audit_log`.
@@ -149,9 +151,9 @@ Inclusi: Carta, Notte, Quaderno, Lavagna. In «Aspetto» si sceglie la modalità
 
 ## 8. Plugin
 
-Oggi c'è un solo plugin interno, il **grafico del carico**, attivabile per l'istanza (admin/rappresentanti) o per utente. Il sistema qui sotto è **da implementare**.
+Oggi c'è un solo plugin interno, il **grafico del carico**, attivabile per l'istanza (admin) o per utente. Il sistema qui sotto è **da implementare**.
 
-Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widget, impostazioni). I plugin di prima parte sono compilati nell'app; quelli di terzi girerebbero in un `iframe` con `sandbox` e comunicazione via `postMessage`, senza accesso alla DEK. Stato (`plugin_state`): attivo per istanza (decide admin/rappresentanti) o per utente.
+Manifest JSON con id, nome, permessi richiesti e punti di aggancio (vista, widget, impostazioni). I plugin di prima parte sono compilati nell'app; quelli di terzi girerebbero in un `iframe` con `sandbox` e comunicazione via `postMessage`, senza accesso alla DEK. Stato (`plugin_state`): attivo per istanza (decide l'admin) o per utente.
 
 ## 9. Distribuzione: Docker, Umbrel, Cloudflare
 

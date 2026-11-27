@@ -1,10 +1,9 @@
 <script lang="ts">
-  // Prima configurazione in cinque passi. Il primo crea l'admin; gli altri si possono rivedere in seguito.
+  // Prima configurazione in quattro passi. Il primo crea l'admin; gli altri si possono rivedere in seguito.
   import ChiaveRecupero from '../ui/ChiaveRecupero.svelte';
   import Icona from '../ui/Icona.svelte';
   import Interruttore from '../ui/Interruttore.svelte';
   import NuovoGruppo from '../ui/NuovoGruppo.svelte';
-  import Foglio from '../ui/Foglio.svelte';
   import { api, type Invito, type Kdf, type StatoAdmin } from '../api';
   import { app, avvisa, messaggio, preparaChiavi, sincronizza, usaChiave } from '../store.svelte';
   import { codiceLeggibile, linkInvito } from '../inviti';
@@ -28,19 +27,15 @@
   let indirizzo = $state(location.protocol === 'https:' ? location.origin : '');
   let annoScolastico = $state(`${anno}/${String(anno + 1).slice(2)}`);
   let fuso = $state(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  // Passi 3-5
+  // Passi 3-4
   let inviti = $state<Invito[]>([]);
   let stato = $state<StatoAdmin | null>(null);
   let nuovoGruppo = $state(false);
-  let nuovo = $state<'materia' | 'tipo' | ''>('');
-  let nomeNuovo = $state('');
-  let colore = $state('#2A9D8F');
 
   const PASSI = [
-    ['Crea l’account admin', 'L’admin gestisce la parte tecnica: utenti, gruppi, plugin e backup.'],
+    ['Crea l’account admin', 'L’admin gestisce solo la parte tecnica: utenti, gruppi, plugin e backup. Non fa parte della classe.'],
     ['Dai un nome alla tua istanza', 'Niente è scritto nel codice: tutto quello che imposti qui si può cambiare dopo.'],
     ['Classi e gruppi', 'Solo l’admin può creare gruppi. Gli eventi pubblici arrivano a chi fa parte del gruppo.'],
-    ['Materie e tag', 'Un colore per ogni materia, un’etichetta per ogni tipo di evento.'],
     ['Sicurezza e backup', 'Lo stato reale di questo server. Le impostazioni di sicurezza stanno in config.toml.'],
   ] as const;
 
@@ -86,8 +81,7 @@
       else if (passo === 2) {
         await api.salvaImpostazioni({ instance_name: istanza, public_url: indirizzo.trim(), school_year: annoScolastico, timezone: fuso });
         await sincronizza(); await caricaInviti(); passo = 3;
-      } else if (passo === 3) passo = 4;
-      else if (passo === 4) { stato = await api.statoAdmin(); passo = 5; }
+      } else if (passo === 3) { stato = await api.statoAdmin(); passo = 4; }
       else onfine();
     } catch (e) { errore = messaggio(e); } finally { occupato = false; }
   }
@@ -97,13 +91,6 @@
     try { await navigator.clipboard.writeText(link); avvisa('Link copiato.'); } catch { avvisa(link); }
   }
 
-  async function aggiungi(ev: SubmitEvent) {
-    ev.preventDefault();
-    try {
-      if (nuovo === 'materia') await api.creaMateria(nomeNuovo, colore); else await api.creaTipo(nomeNuovo);
-      await sincronizza(); nomeNuovo = ''; nuovo = '';
-    } catch (e) { avvisa(messaggio(e)); }
-  }
 </script>
 
 {#if chiave}
@@ -117,8 +104,8 @@
       </div>
 
       <div class="avanzamento">
-        <div aria-hidden="true">{#each [1, 2, 3, 4, 5] as i (i)}<i class:fatto={i <= passo}></i>{/each}</div>
-        <span class="dato">Passo {passo} di 5</span>
+        <div aria-hidden="true">{#each [1, 2, 3, 4] as i (i)}<i class:fatto={i <= passo}></i>{/each}</div>
+        <span class="dato">Passo {passo} di 4</span>
       </div>
 
       <header>
@@ -147,6 +134,7 @@
               {/each}
             </ul>
             <button type="button" class="pulsante tratteggiato aggiungi" onclick={() => (nuovoGruppo = true)}>+ Aggiungi classe o gruppo</button>
+            <p class="nota dopo">Gli eventi li gestiscono i rappresentanti: quando i compagni sono entrati, assegna il ruolo in Persone. Se sei anche tu in classe, crea un secondo account con il codice invito.</p>
             {#each inviti as i (i.id)}
               <div class="riquadro">
                 <span class="dato">Codice invito {app.meta?.groups.find((g) => g.id === i.group_id)?.name}</span>
@@ -154,22 +142,6 @@
                 <span class="nota">Scade tra 7 giorni. Chi entra con il codice è Alunno e lo confermi tu; i ruoli li cambi dopo.</span>
               </div>
             {/each}
-          </div>
-        {:else if passo === 4}
-          <div class="blocco">
-            <span class="dato">Materie · tag colorati</span>
-            <div class="scelte">
-              {#each app.meta?.tags ?? [] as m (m.id)}<span class="scelta"><i class="quadratino grande" style:background={m.color}></i>{m.name}</span>{/each}
-              <button type="button" class="scelta nuova" onclick={() => (nuovo = 'materia')}>+ Materia</button>
-            </div>
-          </div>
-          <div class="blocco">
-            <span class="dato">Etichette di tipo</span>
-            <div class="scelte">
-              {#each app.meta?.labels ?? [] as t (t.id)}<span class="scelta tipo">{t.name}</span>{/each}
-              <button type="button" class="scelta nuova" onclick={() => (nuovo = 'tipo')}>+ Tipo</button>
-            </div>
-            <span class="nota">Puoi aggiungerne altre in qualsiasi momento.</span>
           </div>
         {:else if stato}
           <div>
@@ -192,9 +164,9 @@
       <div>
         <!-- Dopo la creazione dell'admin non si torna al primo passo. -->
         <button type="button" class="indietro" disabled={passo <= 2 || occupato} onclick={() => { errore = ''; passo--; }}>Indietro</button>
-        <button form="passo" class="pulsante grande {passo === 5 ? 'accento' : 'pieno'}" disabled={occupato} aria-busy={occupato}>
+        <button form="passo" class="pulsante grande {passo === 4 ? 'accento' : 'pieno'}" disabled={occupato} aria-busy={occupato}>
           {#if occupato}{passo === 1 ? 'Derivo le chiavi…' : 'Attendi…'}
-          {:else if passo === 5}Apri TaskHit
+          {:else if passo === 4}Apri TaskHit
           {:else}Continua<Icona nome="avanti" size={18} spessore={1.6} />{/if}
         </button>
       </div>
@@ -202,15 +174,6 @@
   </div>
 
   {#if nuovoGruppo}<NuovoGruppo onclose={() => (nuovoGruppo = false)} onfatto={caricaInviti} />{/if}
-  {#if nuovo}
-    <Foglio titolo={nuovo === 'materia' ? 'Nuova materia' : 'Nuovo tipo'} onclose={() => (nuovo = '')}>
-      <form class="breve" onsubmit={aggiungi}>
-        <label class="campo"><span class="dato">Nome</span><input bind:value={nomeNuovo} required maxlength="40" /></label>
-        {#if nuovo === 'materia'}<label class="colore"><span class="dato">Colore</span><input type="color" bind:value={colore} /></label>{/if}
-        <button class="pulsante pieno grande">Aggiungi</button>
-      </form>
-    </Foglio>
-  {/if}
 {/if}
 
 <style>
@@ -220,7 +183,7 @@
   .testa .marchio { font-size: 26px; }
   .testa .dato { letter-spacing: .1em; }
   .avanzamento { display: flex; flex-direction: column; gap: 8px; }
-  .avanzamento div { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .avanzamento div { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   .avanzamento i { height: 3px; background: var(--filetto); }
   .avanzamento i.fatto { background: var(--inchiostro); }
   header { display: flex; flex-direction: column; gap: 8px; }
@@ -230,20 +193,15 @@
   .elenco > li { min-height: 54px; }
   .grande.serif { font-size: 26px; }
   .aggiungi { width: 100%; margin-top: 12px; min-height: 44px; }
+  .dopo { margin-top: 12px; }
   .riquadro { margin-top: 18px; padding: 12px 14px; }
   .codice { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--font-dati); font-size: 22px; letter-spacing: .12em; }
   .codice .collegamento { font-family: var(--font-testo); letter-spacing: 0; }
-  .blocco { display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
-  span.scelta { min-height: 34px; cursor: default; }
-  span.scelta.tipo { min-height: 30px; padding: 0 10px; }
   .backup { min-height: 56px; display: flex; align-items: center; border-bottom: 1px solid var(--filetto); }
   footer { position: sticky; bottom: 0; background: var(--sfondo); border-top: 1px solid var(--filetto); }
   footer div { max-width: 480px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 24px calc(18px + var(--basso)); }
   footer .pulsante { flex: 1; max-width: 220px; }
   .indietro { min-height: 52px; padding: 0 6px; font-size: 15px; }
-  .breve { gap: 18px; }
   .ripristino { align-self: center; cursor: pointer; }
   .ripristino:focus-within { outline: 2px solid var(--accento); outline-offset: 2px; }
-  .colore { display: flex; align-items: center; justify-content: space-between; }
-  .colore input { width: 64px; height: 44px; padding: 2px; border: 1px solid var(--filetto); background: var(--superficie); }
 </style>

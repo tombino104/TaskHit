@@ -82,7 +82,7 @@
       <h1>{decide ? 'Da approvare' : 'Le mie proposte'}</h1>
       {#if caricate}<span class="mono">{restanti ? `${restanti} IN ATTESA` : 'TUTTO FATTO'}</span>{/if}
     </div>
-    <p class="lede">{decide ? 'Proposte dei Nerd in attesa. Decidono rappresentanti e admin; chi propone riceve l’esito nell’Inbox.' : 'Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.'}</p>
+    <p class="lede">{decide ? 'Proposte dei Nerd in attesa. Decidono i rappresentanti; chi propone riceve l’esito nell’Inbox.' : 'Le tue modifiche in attesa. Riceverai l’esito nell’Inbox.'}</p>
   </header>
 
   {#if errore}<p class="errore" role="alert">{errore}</p>{/if}

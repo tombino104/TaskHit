@@ -9,17 +9,17 @@ pub const ROLES: [&str; 4] = ["admin", "rappresentante", "nerd", "alunno"];
 /// Cosa puo' fare un ruolo sugli eventi pubblici.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Publish {
-    /// Modifica diretta (admin, rappresentante).
+    /// Modifica diretta (rappresentante).
     Direct,
     /// La modifica diventa una proposta da approvare (nerd).
     Propose,
-    /// Nessuna modifica (alunno).
+    /// Nessuna modifica (alunno, e admin che non fa parte della classe).
     No,
 }
 
 pub fn publish_right(role: &str) -> Publish {
     match role {
-        "admin" | "rappresentante" => Publish::Direct,
+        "rappresentante" => Publish::Direct,
         "nerd" => Publish::Propose,
         _ => Publish::No,
     }
@@ -29,15 +29,22 @@ pub fn require_admin(u: &AuthUser) -> Result<(), ApiError> {
     if u.role == "admin" { Ok(()) } else { Err(ApiError::Forbidden("operazione riservata all'amministratore")) }
 }
 
+/// L'admin gestisce l'impianto e non partecipa alla classe: niente eventi, materie o proposte.
+pub fn require_class_member(u: &AuthUser) -> Result<(), ApiError> {
+    if u.role == "admin" { Err(ApiError::Forbidden("l'amministratore non gestisce eventi: usa un account della classe")) } else { Ok(()) }
+}
+
+/// I contenuti della classe (materie, tipi, scelte per tutti) li decide il rappresentante.
+pub fn require_representative(u: &AuthUser) -> Result<(), ApiError> {
+    if publish_right(&u.role) == Publish::Direct { Ok(()) } else { Err(ApiError::Forbidden("operazione riservata ai rappresentanti")) }
+}
+
 pub fn now() -> i64 {
     now_secs() as i64
 }
 
-/// L'admin vede tutti i gruppi; gli altri solo quelli di cui fanno parte.
+/// Si accede solo ai gruppi di cui si fa parte (l'admin non ne ha).
 pub fn can_access_group(c: &Connection, u: &AuthUser, group_id: &str) -> Result<bool, ApiError> {
-    if u.role == "admin" {
-        return exists(c, "SELECT 1 FROM groups WHERE id = ?1", group_id);
-    }
     Ok(c.query_row(
         "SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id = ?1 AND user_id = ?2)",
         params![group_id, u.id],

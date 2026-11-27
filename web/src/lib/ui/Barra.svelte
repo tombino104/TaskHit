@@ -5,15 +5,24 @@
   import { rotta } from '../router.svelte';
   import { NOMI_RUOLO, puoPubblicare } from '../events';
 
-  const sezioni = $derived([
-    { id: 'oggi', nome: 'Oggi' },
-    { id: 'calendario', nome: 'Calendario' },
-    { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
-    ...(app.utente && puoPubblicare(app.utente.role) !== 'no' ? [{ id: 'approvazioni', nome: app.utente.role === 'nerd' ? 'Le mie proposte' : 'Da approvare', numero: app.inbox.to_approve }] : []),
-    { id: 'profilo', nome: 'Profilo' },
-    { id: 'aspetto', nome: 'Impostazioni' },
-    ...(app.utente?.role === 'admin' ? [{ id: 'persone', nome: 'Persone' }, { id: 'backup', nome: 'Backup' }] : []),
-  ] as { id: string; nome: string; pallino?: number; numero?: number }[]);
+  const admin = $derived(app.utente?.role === 'admin');
+  const sezioni = $derived((admin
+    ? [
+        { id: 'persone', nome: 'Persone' },
+        { id: 'backup', nome: 'Backup' },
+        { id: 'plugin', nome: 'Plugin' },
+        { id: 'profilo', nome: 'Profilo' },
+        { id: 'aspetto', nome: 'Impostazioni' },
+      ]
+    : [
+        { id: 'oggi', nome: 'Oggi' },
+        { id: 'calendario', nome: 'Calendario' },
+        { id: 'inbox', nome: 'Inbox', pallino: app.inbox.unread },
+        ...(app.utente && puoPubblicare(app.utente.role) !== 'no' ? [{ id: 'approvazioni', nome: app.utente.role === 'nerd' ? 'Le mie proposte' : 'Da approvare', numero: app.inbox.to_approve }] : []),
+        { id: 'profilo', nome: 'Profilo' },
+        { id: 'aspetto', nome: 'Impostazioni' },
+      ]
+  ) as { id: string; nome: string; pallino?: number; numero?: number }[]);
 
   const tutte = $derived(app.meta?.tags.map((t) => t.id) ?? []);
   const visibile = (id: string) => !app.filtri.materie.length || app.filtri.materie.includes(id);
@@ -27,7 +36,7 @@
 </script>
 
 <aside>
-  <a href="#/oggi" class="marchio">TaskHit</a>
+  <a href={admin ? '#/persone' : '#/oggi'} class="marchio">TaskHit</a>
 
   <nav aria-label="Sezioni">
     {#each sezioni as s (s.id)}

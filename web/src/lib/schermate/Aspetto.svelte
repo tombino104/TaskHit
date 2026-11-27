@@ -23,14 +23,14 @@
     ['Nuovi eventi pubblici', 'Quando qualcuno aggiunge un evento per la classe'],
     ['Modifiche ed eliminazioni', 'Date, orari o eventi annullati'],
     ['Promemoria', 'Gli avvisi che imposti su ogni evento'],
-    ['Proposte da approvare', 'Solo per rappresentanti e admin'],
+    ['Proposte da approvare', 'Solo per i rappresentanti'],
     ['Non disturbare', 'Silenzia tutto dalle 22:00 alle 07:00'],
   ] as const;
 </script>
 
 <div class="schermata aspetto">
   <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
-  <h1 class="titolo sottolineato">Aspetto <em>&amp;</em> notifiche</h1>
+  <h1 class="titolo sottolineato">Aspetto{#if app.utente?.role !== 'admin'}{' '}<em>&amp;</em> notifiche{/if}</h1>
 
   <section>
     <h2 class="dato">Modalità</h2>
@@ -59,6 +59,7 @@
     <p class="nota">Un tema è un solo file con colori e font. Il caricamento da qui è in arrivo: per ora l'admin copia il file nella cartella dei temi del server, e chiunque può sceglierlo.</p>
   </section>
 
+  {#if app.utente?.role !== 'admin'}
   <section class="notifiche">
     <h2 class="dato">Notifiche push · in arrivo</h2>
     {#each NOTIFICHE as [nome, descrizione] (nome)}
@@ -66,6 +67,7 @@
     {/each}
     <button type="button" class="pulsante prova" disabled>Invia una notifica di prova</button>
   </section>
+  {/if}
 </div>
 
 <style>

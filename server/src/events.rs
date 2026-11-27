@@ -86,7 +86,8 @@ pub fn clean(c: &Connection, mut d: Data) -> Result<Data, ApiError> {
     }
     if let Some(user) = &d.subject_id {
         let member = c
-            .prepare("SELECT 1 FROM group_members WHERE group_id = ?1 AND user_id = ?2")?
+            .prepare("SELECT 1 FROM group_members m JOIN users u ON u.id = m.user_id
+                       WHERE m.group_id = ?1 AND m.user_id = ?2 AND u.role <> 'admin'")?
             .exists(params![d.group_id, user])?;
         if !member {
             return Err(ApiError::BadRequest("l'alunno scelto non fa parte del gruppo"));
@@ -247,14 +248,17 @@ fn propose(c: &Connection, u: &AuthUser, kind: &str, event_id: Option<&str>, bas
         "INSERT INTO inbox (id, user_id, kind, event_id, actor_id, diff, created_at)
          SELECT lower(hex(randomblob(16))), u.id, 'proposal', ?1, ?2, ?3, ?4 FROM users u
           WHERE u.disabled = 0 AND u.pending = 0 AND u.id <> ?2
-            AND (u.role = 'admin' OR (u.role = 'rappresentante'
-                 AND EXISTS (SELECT 1 FROM group_members m WHERE m.user_id = u.id AND m.group_id = ?5)))",
+            AND u.role = 'rappresentante'
+            AND EXISTS (SELECT 1 FROM group_members m WHERE m.user_id = u.id AND m.group_id = ?5)",
         params![event_id, u.id, payload, now(), d.group_id],
     )?;
     Ok(id)
 }
 
 async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>, ApiError> {
+    if user.role == "admin" {
+        return Ok(Json(json!({ "events": [] })));
+    }
     let events = st
         .db
         .run(move |c| {
@@ -270,12 +274,12 @@ async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                    JOIN users uu ON uu.id = e.updated_by
                   WHERE e.deleted_at IS NULL AND (
                         (e.visibility = 'private' AND e.owner_id = ?1)
-                     OR (e.visibility = 'public' AND (?2 OR EXISTS
-                            (SELECT 1 FROM group_members m WHERE m.group_id = e.group_id AND m.user_id = ?1))))
+                     OR (e.visibility = 'public' AND EXISTS
+                            (SELECT 1 FROM group_members m WHERE m.group_id = e.group_id AND m.user_id = ?1)))
                   ORDER BY e.starts_at, e.created_at"
             );
             let mut stmt = c.prepare(&sql)?;
-            let rows = stmt.query_map(params![user.id, user.role == "admin"], |r| {
+            let rows = stmt.query_map(params![user.id], |r| {
                 Ok(json!({
                     "id": r.get::<_, String>(0)?,
                     "visibility": r.get::<_, String>(1)?,
@@ -314,6 +318,7 @@ fn check_payload(payload: Option<String>) -> Result<String, ApiError> {
 }
 
 async fn create(State(st): State<AppState>, user: AuthUser, Json(req): Json<CreateReq>) -> Result<Json<Value>, ApiError> {
+    common::require_class_member(&user)?;
     let res = st
         .db
         .run(move |c| {
@@ -393,6 +398,7 @@ fn visible(c: &Connection, user: &AuthUser, id: &str) -> Result<Stored, ApiError
 const STALE: &str = "l'evento e' stato modificato nel frattempo: ricarica e riprova";
 
 async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<UpdateReq>) -> Result<Json<Value>, ApiError> {
+    common::require_class_member(&user)?;
     let res = st
         .db
         .run(move |c| {
@@ -454,6 +460,7 @@ struct DeleteReq {
 }
 
 async fn delete(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>, Json(req): Json<DeleteReq>) -> Result<Json<Value>, ApiError> {
+    common::require_class_member(&user)?;
     let res = st
         .db
         .run(move |c| {
@@ -494,6 +501,7 @@ async fn delete(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
 }
 
 async fn history(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>) -> Result<Json<Value>, ApiError> {
+    common::require_class_member(&user)?;
     let items = st
         .db
         .run(move |c| {

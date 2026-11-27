@@ -59,7 +59,8 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                            "subs": subs.split(',').filter(|s| !s.is_empty()).collect::<Vec<_>>(), "personal": r.get::<_, bool>(3)? }))
             })?;
 
-            // Ognuno vede i propri gruppi e i compagni che ne fanno parte; l'admin li vede tutti.
+            // Ognuno vede i propri gruppi e i compagni che ne fanno parte. L'admin vede tutti i gruppi
+            // per gestirli, ma non compare mai tra i membri.
             let mut stmt = c.prepare(
                 "SELECT g.id, g.name, g.kind, EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = g.id AND m.user_id = ?1)
                    FROM groups g
@@ -72,7 +73,7 @@ async fn meta(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             let mut groups = vec![];
             let mut members = c.prepare(
                 "SELECT u.id, u.display_name, u.role FROM group_members m JOIN users u ON u.id = m.user_id
-                  WHERE m.group_id = ?1 AND u.disabled = 0 AND u.pending = 0 ORDER BY u.display_name COLLATE NOCASE",
+                  WHERE m.group_id = ?1 AND u.disabled = 0 AND u.pending = 0 AND u.role <> 'admin' ORDER BY u.display_name COLLATE NOCASE",
             )?;
             for (id, name, kind, mine) in found {
                 let list: Vec<Value> = members
@@ -105,9 +106,7 @@ struct TagReq {
 }
 
 async fn create_tag(State(st): State<AppState>, user: AuthUser, Json(req): Json<TagReq>) -> Result<Json<Value>, ApiError> {
-    if common::publish_right(&user.role) != common::Publish::Direct {
-        return Err(ApiError::Forbidden("le materie le aggiungono rappresentanti e admin"));
-    }
+    common::require_representative(&user)?;
     let name = common::required_text(&req.name, 40, "il nome della materia deve avere da 1 a 40 caratteri")?;
     if crate::themes::contrast(&req.color, "#000000").is_none() {
         return Err(ApiError::BadRequest("il colore deve essere #RRGGBB"));
@@ -132,7 +131,7 @@ struct LabelReq {
 }
 
 async fn create_label(State(st): State<AppState>, user: AuthUser, Json(req): Json<LabelReq>) -> Result<Json<Value>, ApiError> {
-    common::require_admin(&user)?;
+    common::require_representative(&user)?;
     let name = common::required_text(&req.name, 40, "il nome del tipo deve avere da 1 a 40 caratteri")?;
     let id = auth::random_hex(16);
     let lid = id.clone();
@@ -204,8 +203,10 @@ async fn save_plugin(State(st): State<AppState>, user: AuthUser, Path(id): Path<
     }
     let owner = match req.scope.as_str() {
         "user" => user.id.clone(),
-        "instance" if common::publish_right(&user.role) == common::Publish::Direct => String::new(),
-        "instance" => return Err(ApiError::Forbidden("solo rappresentanti e admin decidono per tutta la classe")),
+        "instance" => {
+            common::require_admin(&user)?;
+            String::new()
+        }
         _ => return Err(ApiError::BadRequest("ambito non valido")),
     };
     st.db

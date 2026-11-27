@@ -57,7 +57,7 @@ export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? 'Gruppo'
 
 export const NOMI_RUOLO: Record<Ruolo, string> = { admin: 'Admin', rappresentante: 'Rappresentante', nerd: 'Nerd', alunno: 'Alunno' };
 export const puoPubblicare = (r: Ruolo): 'diretto' | 'proposta' | 'no' =>
-  r === 'admin' || r === 'rappresentante' ? 'diretto' : r === 'nerd' ? 'proposta' : 'no';
+  r === 'rappresentante' ? 'diretto' : r === 'nerd' ? 'proposta' : 'no';
 
 export const AVVISI: { id: string; nome: string }[] = [
   { id: 'g1', nome: '1 giorno prima' },

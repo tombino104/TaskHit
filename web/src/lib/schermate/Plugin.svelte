@@ -6,7 +6,7 @@
   import { api } from '../api';
   import { app, avvisa, messaggio, sincronizza } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
-  import { perGiorno, puoPubblicare } from '../events';
+  import { perGiorno } from '../events';
   import { chiave, dataLunga, giornoBreve, grigliaMese, mese, meseBreve, piuGiorni, settimana } from '../dates';
 
   type Periodo = 'prossimi' | 'settimana' | 'mese';
@@ -46,7 +46,7 @@
   });
 
   const stato = $derived(app.meta?.plugins.grafico ?? { user: true, instance: true });
-  const decide = $derived(!!app.utente && puoPubblicare(app.utente.role) === 'diretto');
+  const admin = $derived(app.utente?.role === 'admin');
   async function cambia(ambito: 'user' | 'instance', attivo: boolean) {
     try { await api.salvaPlugin('grafico', ambito, attivo); await sincronizza(); }
     catch (e) { avvisa(messaggio(e)); }
@@ -57,7 +57,9 @@
   <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
   <h1 class="titolo sottolineato">Plugin</h1>
 
-  {#if stato.user && stato.instance}
+  {#if admin}
+    <p class="nota">Qui decidi quali plugin sono disponibili alla classe.</p>
+  {:else if stato.user && stato.instance}
     <Sblocco />
     <section aria-label="Grafico della settimana" class="carta">
       <div class="testa"><span class="dato">Carico di lavoro</span><span class="dato tenue">{intestazione}</span></div>
@@ -83,8 +85,10 @@
       <span class="riga"><span class="serif">Grafico della settimana</span><span class="mono tenue">v1.0</span></span>
       <span>Quanti eventi hai giorno per giorno, pubblici e privati.</span>
     </div>
-    <Interruttore nome="Mostralo a me" descrizione="Puoi nasconderlo solo per te" attivo={stato.user} disabilitato={!app.online} onchange={(v) => cambia('user', v)} />
-    <Interruttore nome="Attivo per tutta la classe" descrizione="Solo rappresentanti e admin" attivo={stato.instance} disabilitato={!decide || !app.online} onchange={(v) => cambia('instance', v)} />
+    {#if !admin}
+      <Interruttore nome="Mostralo a me" descrizione="Puoi nasconderlo solo per te" attivo={stato.user} disabilitato={!app.online} onchange={(v) => cambia('user', v)} />
+    {/if}
+    <Interruttore nome="Attivo per tutta la classe" descrizione="Lo decide l’admin" attivo={stato.instance} disabilitato={!admin || !app.online} onchange={(v) => cambia('instance', v)} />
     <button type="button" class="pulsante tratteggiato installa" disabled><Icona nome="piu" size={18} />Installa plugin · in arrivo</button>
   </section>
 </div>

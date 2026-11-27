@@ -23,7 +23,7 @@
 
 - **Calendario** per giorno, settimana e mese, con materie colorate, tipi di evento, filtri e ricerca.
 - **Eventi privati** cifrati sul dispositivo: nemmeno l'amministratore del server li riceve in chiaro.
-- **Ruoli**: admin, rappresentanti, nerd e alunni. Le modifiche dei nerd aspettano un'approvazione.
+- **Ruoli**: l'admin gestisce solo il server (persone, gruppi, plugin, backup) e non fa parte della classe; i rappresentanti gestiscono gli eventi; le modifiche dei nerd aspettano la loro approvazione; gli alunni hanno eventi privati.
 - **Inbox** con aggiunte, modifiche ed eliminazioni degli eventi pubblici.
 - **Classi, gruppi e inviti** con conferma dell'amministratore.
 - **Temi** in un singolo file JSON, chiari e scuri.

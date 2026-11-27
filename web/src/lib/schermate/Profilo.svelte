@@ -9,6 +9,7 @@
   import { daChiave, mese, momento } from '../dates';
 
   const utente = $derived(app.utente!);
+  const admin = $derived(utente.role === 'admin');
   const mieiGruppi = $derived(app.meta?.groups.filter((g) => g.mine) ?? []);
   const classe = $derived(mieiGruppi.find((g) => g.kind === 'classe')?.name);
 
@@ -69,11 +70,15 @@
 
   <dl class="scheda-dati">
     <dt>Utente</dt><dd class="mono">{utente.username}</dd>
-    <dt>Gruppi</dt><dd class:tenue={!mieiGruppi.length}>{mieiGruppi.map((g) => g.name).join(' · ') || 'Nessuno'}</dd>
-    <dt>Compleanno</dt>
-    <dd class:tenue={!profilo?.compleanno}>
-      {compleanno}{#if profilo === null}<button type="button" class="sblocca" onclick={() => (sblocco = true)}>Sblocca</button>{/if}
-    </dd>
+    {#if admin}
+      <dt>Compito</dt><dd>Gestione del server. Non fa parte della classe.</dd>
+    {:else}
+      <dt>Gruppi</dt><dd class:tenue={!mieiGruppi.length}>{mieiGruppi.map((g) => g.name).join(' · ') || 'Nessuno'}</dd>
+      <dt>Compleanno</dt>
+      <dd class:tenue={!profilo?.compleanno}>
+        {compleanno}{#if profilo === null}<button type="button" class="sblocca" onclick={() => (sblocco = true)}>Sblocca</button>{/if}
+      </dd>
+    {/if}
   </dl>
 
   <nav aria-label="Impostazioni">
@@ -81,9 +86,9 @@
       <a {href}><span class="serif">{titolo}</span><span class="valore">{valore}<Icona nome="destra" size={16} /></span></a>
     {/snippet}
     {@render riga('#/aspetto', 'Aspetto e tema', nomeTema)}
-    {@render riga('#/aspetto', 'Notifiche', 'In arrivo')}
+    {#if !admin}{@render riga('#/aspetto', 'Notifiche', 'In arrivo')}{/if}
     {@render riga('#/plugin', 'Plugin', pluginAttivi ? '1 attivo' : 'Nessuno attivo')}
-    {#if utente.role === 'admin'}
+    {#if admin}
       {@render riga('#/persone', 'Persone e gruppi', 'Admin')}
       {@render riga('#/backup', 'Backup', 'Admin')}
     {/if}
@@ -104,10 +109,12 @@
   <Foglio titolo="Modifica profilo" onclose={() => (foglio = '')}>
     <form onsubmit={salva}>
       <label class="campo"><span class="dato">Nome visualizzato</span><input bind:value={nome} required maxlength="60" autocomplete="name" /></label>
-      {#if app.sbloccato && profilo !== null}
-        <label class="campo"><span class="dato">Compleanno · cifrato</span><input type="date" bind:value={data} /></label>
-      {:else}
-        <p class="nota">Il compleanno è cifrato: <button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>sblocca</button> per modificarlo.</p>
+      {#if !admin}
+        {#if app.sbloccato && profilo !== null}
+          <label class="campo"><span class="dato">Compleanno · cifrato</span><input type="date" bind:value={data} /></label>
+        {:else}
+          <p class="nota">Il compleanno è cifrato: <button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>sblocca</button> per modificarlo.</p>
+        {/if}
       {/if}
       {#if errore}<p class="errore" role="alert">{errore}</p>{/if}
       <button class="pulsante pieno grande" disabled={occupato} aria-busy={occupato}>Salva</button>
@@ -116,8 +123,10 @@
 {:else if foglio === 'privacy'}
   <Foglio titolo="Privacy e sicurezza" onclose={() => (foglio = '')}>
     <dl class="scheda-dati">
-      <dt>Privati</dt><dd>Cifrati sul dispositivo: il server non li legge.</dd>
-      <dt>Stato</dt><dd>{app.sbloccato ? 'Sbloccati in questa sessione' : 'Bloccati'}{#if !app.sbloccato}<button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>Sblocca</button>{/if}</dd>
+      {#if !admin}
+        <dt>Privati</dt><dd>Cifrati sul dispositivo: il server non li legge.</dd>
+        <dt>Stato</dt><dd>{app.sbloccato ? 'Sbloccati in questa sessione' : 'Bloccati'}{#if !app.sbloccato}<button type="button" class="sblocca" onclick={() => { foglio = ''; sblocco = true; }}>Sblocca</button>{/if}</dd>
+      {/if}
       <dt>Accessi</dt><dd>{utente.sessions} {utente.sessions === 1 ? 'dispositivo collegato' : 'dispositivi collegati'}</dd>
     </dl>
     <button type="button" class="pulsante grande" disabled={utente.sessions < 2 || !app.online} onclick={esciAltrove}>Esci dagli altri dispositivi</button>

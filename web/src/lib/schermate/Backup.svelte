@@ -107,7 +107,7 @@
   const ultimo = $derived(stato?.items[0]);
 </script>
 
-<div class="schermata backup">
+<div class="schermata con-menu backup">
   <a href="#/profilo" class="torna"><Icona nome="sinistra" size={20} />Profilo</a>
   <span class="dato occhio">Pannello admin</span>
   <h1 class="titolo sottolineato">Backup</h1>
