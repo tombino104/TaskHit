@@ -8,10 +8,10 @@
   const materia = $derived(materiaDi(app.meta, evento.tag_id));
 </script>
 
-<a href="#/evento/{evento.id}" class:compatta>
+<a href="#/evento/{evento.id}" class="tinta-materia" class:compatta style:--materia={materia?.color}>
   <span class="orari">
     <span>{ora(evento.starts_at)}</span>
-    {#if evento.ends_at && !compatta}<span class="tenue">{ora(evento.ends_at)}</span>{/if}
+    {#if evento.ends_at && !compatta}<span class="fine">{ora(evento.ends_at)}</span>{/if}
   </span>
   <span class="corpo">
     <span class="dato meta">
@@ -19,7 +19,7 @@
       {#if compatta}
         <span>{riassunto(app.meta, evento)}</span>
       {:else}
-        {#if materia}<span>{materia.name}</span><span class="tenue">·</span>{/if}
+        {#if materia}<span>{materia.name}</span><span>·</span>{/if}
         <span>{nomeTipo(app.meta, evento.label_id, evento.sub_kind)}</span>
       {/if}
     </span>
@@ -35,13 +35,14 @@
 </a>
 
 <style>
-  a { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--filetto); }
-  a.compatta { grid-template-columns: 50px minmax(0, 1fr); padding: 12px 0; }
+  a { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 12px; margin-top: 8px; padding: 12px 12px 12px 10px; border-left: 4px solid var(--materia, var(--filetto)); }
+  a.compatta { grid-template-columns: 50px minmax(0, 1fr); padding-block: 10px; }
   .orari { display: flex; flex-direction: column; font-family: var(--font-dati); font-size: 13px; padding-top: 2px; }
   .corpo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .compatta .corpo { gap: 3px; }
   .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; letter-spacing: .06em; }
   .nome { font-family: var(--font-titoli); font-size: 27px; line-height: 1.05; overflow-wrap: anywhere; }
   .compatta .nome { font-size: 23px; line-height: 1.1; }
-  .chi { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--attenuato); }
+  .chi { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--inchiostro-2); }
+  .fine { color: var(--inchiostro-2); }
 </style>

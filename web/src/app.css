@@ -87,6 +87,10 @@ textarea { width: 100%; resize: vertical; border: 1px solid var(--filetto); bord
 input[type='checkbox'] { width: 18px; height: 18px; margin: 0; accent-color: var(--inchiostro); }
 .errore { border-left: 3px solid var(--accento); padding: 8px 12px; background: var(--superficie); font-size: 14px; }
 
+/* Gli eventi hanno il fondo pastello della materia; senza materia restano neutri. */
+.tinta-materia { background: color-mix(in srgb, var(--materia, var(--superficie)) 12%, var(--superficie)); }
+:root[data-tipo='scuro'] .tinta-materia { background: color-mix(in srgb, var(--materia, var(--superficie)) 18%, var(--superficie)); }
+
 /* --- Elenchi --- */
 .elenco { border-top: 1px solid var(--inchiostro); }
 .elenco > li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 60px; border-bottom: 1px solid var(--filetto); }

@@ -8,7 +8,7 @@
   import { orologio } from '../orologio.svelte';
   import { largo } from '../schermo.svelte';
   import { rotta } from '../router.svelte';
-  import { colore, filtra, filtriAttivi, perGiorno, riassunto } from '../events';
+  import { colore, filtra, filtriAttivi, perGiorno, riassunto, materiaDi } from '../events';
   import {
     chiave, chiaveValida, daChiave, dataLunga, giornoBreve, grigliaMese, maiuscola, mese, numeroSettimana,
     ora, piuGiorni, piuMesi, settimana,
@@ -126,7 +126,7 @@
             <h2><span class="dato">{giornoBreve(d)}</span><span class="grande">{d.getDate()}</span></h2>
             <div class="schede-evento">
               {#each l as e (e.id)}
-                <a href="#/evento/{e.id}" style:border-top-color={colore(app.meta, e.tag_id)}>
+                <a href="#/evento/{e.id}" class="tinta-materia" style:--materia={materiaDi(app.meta, e.tag_id)?.color}>
                   <span class="mono riga"><span>{ora(e.starts_at)}</span><span>{e.privato ? 'PRIVATO' : 'PUBBLICO'}</span></span>
                   <span class="dato">{riassunto(app.meta, e)}</span>
                   <span class="nome">{e.title}</span>
@@ -226,7 +226,7 @@
   .grande { font-size: 40px; line-height: 1; }
   .festivo .grande { color: var(--attenuato); }
   .schede-evento { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-  .schede-evento a { display: flex; flex-direction: column; gap: 5px; padding: 10px 10px 12px; background: var(--superficie); border: 1px solid var(--filetto); border-top-width: 3px; }
+  .schede-evento a { display: flex; flex-direction: column; gap: 5px; padding: 10px 10px 12px; border: 1px solid var(--filetto); border-top: 3px solid var(--materia, var(--attenuato)); }
   .riga { display: flex; justify-content: space-between; gap: 4px; font-size: 11px; color: var(--inchiostro-2); }
   .schede-evento .dato { font-size: 10px; letter-spacing: .06em; }
   .nome { font-family: var(--font-titoli); font-size: 22px; line-height: 1.05; overflow-wrap: anywhere; }
