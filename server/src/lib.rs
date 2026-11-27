@@ -47,7 +47,7 @@ pub fn build_state(cfg: Config) -> anyhow::Result<AppState> {
     };
 
     let db = db::Db::open(&cfg.db_path(), db_key.as_ref())?;
-    themes::seed_defaults(&cfg.themes_dir())?;
+    themes::prepare_dir(&cfg.themes_dir())?;
     let dummy_hash = auth::hash_auth_key("taskhit-hash-fittizio")?;
     let sec = &cfg.security;
     Ok(AppState {

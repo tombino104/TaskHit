@@ -5,7 +5,7 @@
 import { api, ApiError, type Campi, type DatiPubblici, type EventoServer, type Inbox, type Kdf, type Me, type Meta, type Theme } from './api';
 import * as C from './crypto';
 import { SENZA_FILTRI, type Evento, type Filtri } from './events';
-import { applyTheme, cacheThemes, cachedThemes, getPrefs, pickTheme, setPrefs, type Preferenze } from './theme';
+import { applyTheme, cacheThemes, cachedThemes, getPrefs, pickTheme, setPrefs, tipoDi, type Preferenze } from './theme';
 
 const COPIA = 'th-copia';
 const SBLOCCO = 'th-sblocco';
@@ -34,8 +34,8 @@ let epoca = 0;
 
 // --- Temi ---
 export function riapplicaTema(): void {
-  const t = pickTheme(app.temi, app.preferenze, matchMedia('(prefers-color-scheme: dark)').matches);
-  if (t) applyTheme(t);
+  const t = pickTheme(app.temi, app.preferenze);
+  if (t) applyTheme(t, tipoDi(app.preferenze, matchMedia('(prefers-color-scheme: dark)').matches));
 }
 
 export function scegliPreferenze(p: Partial<Preferenze>): void {

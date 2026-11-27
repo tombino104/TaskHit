@@ -1,0 +1,15 @@
+{
+  "nome": "Quaderno",
+  "tipo": "chiaro",
+  "colori": {
+    "sfondo": "#F4F6FA",
+    "superficie": "#FFFFFF",
+    "inchiostro": "#14213D",
+    "inchiostro2": "#3E4A66",
+    "attenuato": "#5F6B85",
+    "filetto": "#D3DAE8",
+    "accento": "#B83246",
+    "suAccento": "#FFFFFF"
+  },
+  "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
+}

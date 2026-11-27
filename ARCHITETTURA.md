@@ -149,14 +149,16 @@ Un tema è **un solo file JSON** in `/data/themes/`. Il server ne carica l'elenc
 
 ```json
 {
-  "nome": "Carta", "tipo": "chiaro", "abbinato": "notte",
-  "colori": { "sfondo": "#F1F0EB", "superficie": "#FAFAF7", "inchiostro": "#17171B", "inchiostro2": "#4F4F58",
+  "nome": "Carta",
+  "chiaro": { "sfondo": "#F1F0EB", "superficie": "#FAFAF7", "inchiostro": "#17171B", "inchiostro2": "#4F4F58",
               "attenuato": "#6B6B73", "filetto": "#D8D7D0", "accento": "#2C3FD1", "suAccento": "#FFFFFF" },
+  "scuro":  { "sfondo": "#131316", "superficie": "#1C1C21", "inchiostro": "#ECEBE6", "inchiostro2": "#B4B3BA",
+              "attenuato": "#8F8E97", "filetto": "#2F2F36", "accento": "#8F9BFF", "suAccento": "#131316" },
   "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
 }
 ```
 
-Inclusi: Carta, Notte, Quaderno, Lavagna. In «Aspetto» si sceglie la modalità (chiaro, scuro, sistema) e un tema per il giorno e uno per la sera. I file non validi non fanno fallire l'app: compaiono in `invalid` con il motivo. Il client segue «sistema» (chiaro/scuro) o il tema scelto.
+Ogni tema ha **sempre entrambe le versioni**: un file senza `chiaro` o senza `scuro` non è valido, e ciascuna versione deve superare i controlli di contrasto. Inclusi: Carta, Quaderno, Lavagna. In «Aspetto» si scelgono, separatamente, il tema e la modalità (chiaro, scuro, sistema). I file non validi non fanno fallire l'app: compaiono in `invalid` con il motivo. All'avvio i predefiniti rimasti nel formato precedente vengono sostituiti (se modificati a mano, restano come `.json.vecchio`).
 
 ## 8. Plugin
 

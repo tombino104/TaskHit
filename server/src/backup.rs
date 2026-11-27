@@ -501,6 +501,8 @@ async fn apply(st: &AppState, opened: Opened, only_if_empty: bool) -> Result<(),
             for (name, data) in &opened.themes {
                 fs::write(themes_dir.join(name), data).map_err(ApiError::internal)?;
             }
+            // Un backup vecchio puo' riportare temi nel formato precedente.
+            crate::themes::prepare_dir(&themes_dir).map_err(ApiError::internal)?;
             Ok(())
         })
         .await

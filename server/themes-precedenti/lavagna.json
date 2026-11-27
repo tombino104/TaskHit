@@ -1,0 +1,15 @@
+{
+  "nome": "Lavagna",
+  "tipo": "scuro",
+  "colori": {
+    "sfondo": "#1E2B25",
+    "superficie": "#26352E",
+    "inchiostro": "#EAF0EA",
+    "inchiostro2": "#C2CEC5",
+    "attenuato": "#93A399",
+    "filetto": "#34463C",
+    "accento": "#F2C94C",
+    "suAccento": "#1E2B25"
+  },
+  "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
+}

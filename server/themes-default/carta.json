@@ -1,8 +1,6 @@
 {
   "nome": "Carta",
-  "tipo": "chiaro",
-  "abbinato": "notte",
-  "colori": {
+  "chiaro": {
     "sfondo": "#F1F0EB",
     "superficie": "#FAFAF7",
     "inchiostro": "#17171B",
@@ -11,6 +9,16 @@
     "filetto": "#D8D7D0",
     "accento": "#2C3FD1",
     "suAccento": "#FFFFFF"
+  },
+  "scuro": {
+    "sfondo": "#131316",
+    "superficie": "#1C1C21",
+    "inchiostro": "#ECEBE6",
+    "inchiostro2": "#B4B3BA",
+    "attenuato": "#8F8E97",
+    "filetto": "#2F2F36",
+    "accento": "#8F9BFF",
+    "suAccento": "#131316"
   },
   "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
 }

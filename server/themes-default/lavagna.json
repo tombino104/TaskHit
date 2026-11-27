@@ -1,7 +1,16 @@
 {
   "nome": "Lavagna",
-  "tipo": "scuro",
-  "colori": {
+  "chiaro": {
+    "sfondo": "#EEF3EE",
+    "superficie": "#FAFCF9",
+    "inchiostro": "#17261F",
+    "inchiostro2": "#3D5046",
+    "attenuato": "#536659",
+    "filetto": "#CFDBD1",
+    "accento": "#755600",
+    "suAccento": "#FFFFFF"
+  },
+  "scuro": {
     "sfondo": "#1E2B25",
     "superficie": "#26352E",
     "inchiostro": "#EAF0EA",

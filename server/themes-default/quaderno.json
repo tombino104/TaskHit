@@ -1,7 +1,6 @@
 {
   "nome": "Quaderno",
-  "tipo": "chiaro",
-  "colori": {
+  "chiaro": {
     "sfondo": "#F4F6FA",
     "superficie": "#FFFFFF",
     "inchiostro": "#14213D",
@@ -10,6 +9,16 @@
     "filetto": "#D3DAE8",
     "accento": "#B83246",
     "suAccento": "#FFFFFF"
+  },
+  "scuro": {
+    "sfondo": "#101624",
+    "superficie": "#182033",
+    "inchiostro": "#E8ECF5",
+    "inchiostro2": "#BAC3D8",
+    "attenuato": "#929DB8",
+    "filetto": "#2A3550",
+    "accento": "#FF8A9A",
+    "suAccento": "#101624"
   },
   "font": { "titoli": "Instrument Serif", "testo": "Geist", "dati": "Geist Mono" }
 }

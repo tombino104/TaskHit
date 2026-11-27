@@ -3,7 +3,7 @@ import type { Meta } from './api';
 import * as D from './dates';
 import { differenze, filtra, fraseOggi, fraseStoria, iniziali, perGiorno, righeModifiche, SENZA_FILTRI, testoAvvisi, testoSu, type Evento } from './events';
 import { codiceLeggibile, linkInvito } from './inviti';
-import { pickTheme, PREFERENZE_BASE } from './theme';
+import { aggiornaPreferenze, pickTheme, PREFERENZE_BASE, tipoDi } from './theme';
 import type { Theme } from './api';
 
 const meta: Meta = {
@@ -78,13 +78,18 @@ describe('eventi', () => {
 });
 
 describe('temi', () => {
-  const tema = (id: string, tipo: Theme['tipo']) => ({ id, nome: id, tipo }) as Theme;
-  const temi = [tema('carta', 'chiaro'), tema('lavagna', 'scuro'), tema('notte', 'scuro'), tema('quaderno', 'chiaro')];
-  it('segue il sistema: Carta di giorno e Notte di sera', () => {
-    expect([pickTheme(temi, PREFERENZE_BASE, false)?.id, pickTheme(temi, PREFERENZE_BASE, true)?.id]).toEqual(['carta', 'notte']);
+  const temi = ['carta', 'lavagna', 'quaderno'].map((id) => ({ id, nome: id }) as Theme);
+  it('sceglie il tema e ripiega su Carta se sparisce', () => {
+    expect(pickTheme(temi, { modo: 'scuro', tema: 'lavagna' })?.id).toBe('lavagna');
+    expect(pickTheme(temi, { modo: 'chiaro', tema: 'cancellato' })?.id).toBe('carta');
   });
-  it('rispetta le scelte e ripiega se un tema sparisce', () => {
-    expect(pickTheme(temi, { modo: 'scuro', chiaro: 'carta', scuro: 'lavagna' }, false)?.id).toBe('lavagna');
-    expect(pickTheme(temi, { modo: 'chiaro', chiaro: 'cancellato', scuro: 'notte' }, true)?.id).toBe('carta');
+  it('la modalità decide quale versione si vede', () => {
+    expect([tipoDi(PREFERENZE_BASE, false), tipoDi(PREFERENZE_BASE, true), tipoDi({ modo: 'chiaro', tema: 'carta' }, true)]).toEqual(['chiaro', 'scuro', 'chiaro']);
+  });
+  it('traduce le vecchie scelte (un tema di giorno e uno di sera)', () => {
+    expect(aggiornaPreferenze({ modo: 'sistema', chiaro: 'carta', scuro: 'notte' })).toEqual({ modo: 'sistema', tema: 'carta' });
+    expect(aggiornaPreferenze({ modo: 'sistema', chiaro: 'carta', scuro: 'lavagna' }).tema).toBe('lavagna');
+    expect(aggiornaPreferenze({ modo: 'chiaro', chiaro: 'quaderno', scuro: 'lavagna' }).tema).toBe('quaderno');
+    expect(aggiornaPreferenze({ modo: 'scuro', chiaro: 'quaderno', scuro: 'notte' }).tema).toBe('carta');
   });
 });

@@ -1,19 +1,27 @@
-//! Temi: un solo file JSON per tema, letto da tutta l'app.
+//! Temi: un solo file JSON per tema, con la versione chiara e quella scura, letto da tutta l'app.
 //! Il server li valida (colori, contrasto, nomi dei font) prima di offrirli ai client,
 //! cosi' un tema illeggibile o malformato non puo' rompere l'interfaccia.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{collections::BTreeMap, fs, path::Path};
 
 pub const COLOR_KEYS: [&str; 8] = ["sfondo", "superficie", "inchiostro", "inchiostro2", "attenuato", "filetto", "accento", "suAccento"];
 const FONT_KEYS: [&str; 3] = ["titoli", "testo", "dati"];
 const MAX_FILE_BYTES: u64 = 16 * 1024;
 
-const DEFAULTS: [(&str, &str); 4] = [
+const DEFAULTS: [(&str, &str); 3] = [
     ("carta", include_str!("../themes-default/carta.json")),
-    ("notte", include_str!("../themes-default/notte.json")),
     ("quaderno", include_str!("../themes-default/quaderno.json")),
     ("lavagna", include_str!("../themes-default/lavagna.json")),
+];
+
+/// I predefiniti fino alla 0.6, quando ogni file era o chiaro o scuro: servono solo per aggiornarli.
+const PREVIOUS: [(&str, &str); 4] = [
+    ("carta", include_str!("../themes-precedenti/carta.json")),
+    ("notte", include_str!("../themes-precedenti/notte.json")),
+    ("quaderno", include_str!("../themes-precedenti/quaderno.json")),
+    ("lavagna", include_str!("../themes-precedenti/lavagna.json")),
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,10 +29,8 @@ pub struct Theme {
     #[serde(default, skip_deserializing)]
     pub id: String,
     pub nome: String,
-    pub tipo: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub abbinato: Option<String>,
-    pub colori: BTreeMap<String, String>,
+    pub chiaro: BTreeMap<String, String>,
+    pub scuro: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub font: BTreeMap<String, String>,
 }
@@ -69,18 +75,11 @@ pub fn validate(t: &Theme) -> Result<(), String> {
     if t.nome.trim().is_empty() || t.nome.chars().count() > 40 {
         return Err("'nome' deve avere da 1 a 40 caratteri".into());
     }
-    if t.tipo != "chiaro" && t.tipo != "scuro" {
-        return Err("'tipo' deve essere \"chiaro\" o \"scuro\"".into());
-    }
-    for k in COLOR_KEYS {
-        match t.colori.get(k) {
-            None => return Err(format!("manca il colore '{k}'")),
-            Some(v) if parse_hex(v).is_none() => return Err(format!("il colore '{k}' deve essere #RRGGBB")),
-            _ => {}
-        }
-    }
-    if let Some(extra) = t.colori.keys().find(|k| !COLOR_KEYS.contains(&k.as_str())) {
-        return Err(format!("colore sconosciuto '{extra}'"));
+    validate_palette(&t.chiaro).map_err(|e| format!("versione chiara: {e}"))?;
+    validate_palette(&t.scuro).map_err(|e| format!("versione scura: {e}"))?;
+    // La versione scura deve essere davvero piu' scura di quella chiara.
+    if brightness(&t.scuro) >= brightness(&t.chiaro) {
+        return Err("lo sfondo di 'scuro' deve essere piu' scuro di quello di 'chiaro'".into());
     }
     for (k, v) in &t.font {
         if !FONT_KEYS.contains(&k.as_str()) {
@@ -91,7 +90,25 @@ pub fn validate(t: &Theme) -> Result<(), String> {
             return Err(format!("il font '{k}' ha un nome non valido"));
         }
     }
-    let c = |k: &str| t.colori[k].as_str();
+    Ok(())
+}
+
+fn brightness(colors: &BTreeMap<String, String>) -> f64 {
+    colors.get("sfondo").and_then(|c| parse_hex(c)).map(luminance).unwrap_or(0.0)
+}
+
+fn validate_palette(colors: &BTreeMap<String, String>) -> Result<(), String> {
+    for k in COLOR_KEYS {
+        match colors.get(k) {
+            None => return Err(format!("manca il colore '{k}'")),
+            Some(v) if parse_hex(v).is_none() => return Err(format!("il colore '{k}' deve essere #RRGGBB")),
+            _ => {}
+        }
+    }
+    if let Some(extra) = colors.keys().find(|k| !COLOR_KEYS.contains(&k.as_str())) {
+        return Err(format!("colore sconosciuto '{extra}'"));
+    }
+    let c = |k: &str| colors[k].as_str();
     let checks = [
         ("inchiostro", "sfondo", 7.0),
         ("inchiostro", "superficie", 7.0),
@@ -114,13 +131,40 @@ fn valid_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 40 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
-/// Copia i temi predefiniti solo se la cartella non contiene ancora nessun .json.
-pub fn seed_defaults(dir: &Path) -> std::io::Result<()> {
+/// Aggiorna i predefiniti rimasti nel formato precedente, poi copia quelli attuali
+/// se la cartella non contiene ancora nessun .json.
+pub fn prepare_dir(dir: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dir)?;
+    upgrade_defaults(dir)?;
     let has_any = fs::read_dir(dir)?.filter_map(Result::ok).any(|e| e.path().extension().is_some_and(|x| x == "json"));
     if !has_any {
         for (id, body) in DEFAULTS {
             fs::write(dir.join(format!("{id}.json")), body)?;
+        }
+    }
+    Ok(())
+}
+
+fn is_old_format(v: &Value) -> bool {
+    v.get("colori").is_some() || v.get("tipo").is_some()
+}
+
+/// Un predefinito mai toccato viene sostituito; se qualcuno l'aveva modificato resta come `.json.vecchio`.
+fn upgrade_defaults(dir: &Path) -> std::io::Result<()> {
+    for (id, previous) in PREVIOUS {
+        let path = dir.join(format!("{id}.json"));
+        let Ok(text) = fs::read_to_string(&path) else { continue };
+        let Ok(found) = serde_json::from_str::<Value>(&text) else { continue };
+        if !is_old_format(&found) {
+            continue;
+        }
+        if serde_json::from_str::<Value>(previous).ok().as_ref() == Some(&found) {
+            fs::remove_file(&path)?;
+        } else {
+            fs::rename(&path, dir.join(format!("{id}.json.vecchio")))?;
+        }
+        if let Some((_, body)) = DEFAULTS.iter().find(|(d, _)| *d == id) {
+            fs::write(&path, body)?;
         }
     }
     Ok(())
@@ -144,7 +188,13 @@ pub fn load_dir(dir: &Path) -> ThemeList {
             Err(e) => { bad(format!("non leggibile: {e}")); continue; }
             _ => {}
         }
-        let parsed = fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| serde_json::from_str::<Theme>(&s).map_err(|e| format!("JSON non valido: {e}")));
+        let parsed = fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| {
+            let value = serde_json::from_str::<Value>(&s).map_err(|e| format!("JSON non valido: {e}"))?;
+            if is_old_format(&value) {
+                return Err("formato precedente: servono le sezioni 'chiaro' e 'scuro' nello stesso file".into());
+            }
+            serde_json::from_value::<Theme>(value).map_err(|e| format!("JSON non valido: {e}"))
+        });
         match parsed {
             Ok(mut t) => match validate(&t) {
                 Ok(()) => { t.id = id; out.themes.push(t); }

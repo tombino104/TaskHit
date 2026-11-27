@@ -225,7 +225,10 @@ async fn themes_are_seeded_validated_and_filtered() {
     let (s, _, list) = send(&app, Method::GET, "/api/themes", None, &[]).await;
     assert_eq!(s, StatusCode::OK);
     let ids: Vec<_> = list["themes"].as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap().to_owned()).collect();
-    assert_eq!(ids, ["carta", "lavagna", "notte", "quaderno"]);
+    assert_eq!(ids, ["carta", "lavagna", "quaderno"]);
+    for t in list["themes"].as_array().unwrap() {
+        assert!(t["chiaro"]["sfondo"].is_string() && t["scuro"]["sfondo"].is_string(), "{t}");
+    }
     assert!(list["invalid"].as_array().unwrap().is_empty());
 
     // Un tema nuovo = un solo file nella cartella.
@@ -238,13 +241,41 @@ async fn themes_are_seeded_validated_and_filtered() {
     std::fs::write(themes_dir.join("Nome Brutto.json"), "{}").unwrap();
     let evil = std::fs::read_to_string(themes_dir.join("carta.json")).unwrap().replace("Geist Mono", "x\"; } body { display:none");
     std::fs::write(themes_dir.join("font-strano.json"), evil).unwrap();
+    // Solo chiaro (formato precedente) e solo una delle due sezioni.
+    std::fs::write(themes_dir.join("solo-chiaro.json"), include_str!("../themes-precedenti/carta.json")).unwrap();
+    let mut half: serde_json::Value = serde_json::from_str(include_str!("../themes-default/carta.json")).unwrap();
+    half.as_object_mut().unwrap().remove("scuro");
+    std::fs::write(themes_dir.join("a-meta.json"), half.to_string()).unwrap();
 
     let (_, _, list) = send(&app, Method::GET, "/api/themes", None, &[]).await;
     let ids: Vec<_> = list["themes"].as_array().unwrap().iter().map(|t| t["id"].as_str().unwrap().to_owned()).collect();
     assert!(ids.contains(&"sabbia".to_owned()), "{ids:?}");
     assert!(!ids.contains(&"illeggibile".to_owned()) && !ids.contains(&"font-strano".to_owned()));
     let invalid: Vec<_> = list["invalid"].as_array().unwrap().iter().map(|i| i["file"].as_str().unwrap().to_owned()).collect();
-    assert_eq!(invalid.len(), 3, "{invalid:?}");
+    assert_eq!(invalid.len(), 5, "{invalid:?}");
+}
+
+#[test]
+fn old_default_themes_are_upgraded_without_losing_edits() {
+    let dir = std::env::temp_dir().join(format!("taskhit-temi-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("carta.json"), include_str!("../themes-precedenti/carta.json")).unwrap();
+    std::fs::write(dir.join("notte.json"), include_str!("../themes-precedenti/notte.json")).unwrap();
+    let edited = include_str!("../themes-precedenti/lavagna.json").replace("Lavagna", "La mia lavagna");
+    std::fs::write(dir.join("lavagna.json"), &edited).unwrap();
+
+    themes::prepare_dir(&dir).unwrap();
+    themes::prepare_dir(&dir).unwrap(); // ripeterlo non cambia nulla
+
+    let list = themes::load_dir(&dir);
+    let ids: Vec<_> = list.themes.iter().map(|t| t.id.as_str()).collect();
+    // «quaderno» era stato tolto dall'admin: non ricompare.
+    assert_eq!(ids, ["carta", "lavagna"]);
+    assert!(list.invalid.is_empty(), "{:?}", list.invalid);
+    assert!(!dir.join("notte.json").exists());
+    assert_eq!(std::fs::read_to_string(dir.join("lavagna.json.vecchio")).unwrap(), edited);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

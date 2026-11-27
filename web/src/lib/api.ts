@@ -45,8 +45,8 @@ export interface ThemeColors {
   attenuato: string; filetto: string; accento: string; suAccento: string;
 }
 export interface Theme {
-  id: string; nome: string; tipo: 'chiaro' | 'scuro'; abbinato?: string;
-  colori: ThemeColors; font?: { titoli?: string; testo?: string; dati?: string };
+  id: string; nome: string;
+  chiaro: ThemeColors; scuro: ThemeColors; font?: { titoli?: string; testo?: string; dati?: string };
 }
 export interface NuovoAccount {
   first_name: string; last_name: string; auth_key: string; kdf_salt: string;
