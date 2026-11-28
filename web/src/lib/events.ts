@@ -60,6 +60,10 @@ export function riassunto(meta: Meta | null, e: Pick<Campi, 'tag_id' | 'label_id
 export const gruppoDi = (meta: Meta | null, id: string | null): Gruppo | undefined => meta?.groups.find((g) => g.id === id);
 export const etichettaGruppo = (g: Gruppo | undefined): string => (!g ? t('Gruppo') : g.kind === 'classe' ? t('Classe {nome}', { nome: g.name }) : g.work ? g.name : t('Gruppo {nome}', { nome: g.name }));
 
+/** La persona a cui si riferisce un evento pubblico; vuoto se vale per tutto il gruppo (o non è più nel gruppo). */
+export const nomeSoggetto = (meta: Meta | null, e: { group_id: string | null; subject_id?: string | null }): string =>
+  (e.subject_id && gruppoDi(meta, e.group_id)?.members.find((m) => m.id === e.subject_id)?.name) || '';
+
 export const NOMI_RUOLO: Record<Ruolo, string> = { admin: t('Admin'), rappresentante: t('Rappresentante'), nerd: t('Nerd'), alunno: t('Alunno') };
 /** Inviti, richieste, gruppi e plugin: admin e rappresentanti. */
 export const puoGestire = (r: Ruolo): boolean => r === 'admin' || r === 'rappresentante';

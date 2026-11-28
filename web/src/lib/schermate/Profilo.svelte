@@ -128,7 +128,7 @@
     <button type="button" class="voce-menu esci" onclick={esci}><span class="serif">{t('Esci')}</span></button>
   </nav>
 
-  <p class="piede">TaskHit · {location.host}<br />
+  <p class="piede">TaskHit {__VERSIONE__} · {location.host}<br />
     {t('Ultima sincronizzazione: {quando}', { quando: app.ultimaSync ? momento(app.ultimaSync / 1000) : t('mai') })} · {app.online ? t('dati disponibili offline') : t('sei offline')}</p>
 </div>
 

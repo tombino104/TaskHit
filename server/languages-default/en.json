@@ -840,6 +840,15 @@
   "un gruppo di lavoro dura al massimo 90 giorni in tutto": "a work group lasts at most 90 days in total",
   "solo un rappresentante puo' eliminare un gruppo di lavoro": "only a representative can delete a work group",
   "il nome del lavoro deve avere da 1 a 60 caratteri": "the assignment name must be 1 to 60 characters",
-  "i gruppi di lavoro li gestiscono i rappresentanti della classe e il capogruppo": "work groups are managed by class representatives and the group leader"
+  "i gruppi di lavoro li gestiscono i rappresentanti della classe e il capogruppo": "work groups are managed by class representatives and the group leader",
+  "Account eliminato": "Deleted account",
+  "Per {nome}": "For {nome}",
+  "Account di {nome} eliminato.": "{nome}'s account has been deleted.",
+  "Elimina account…": "Delete account…",
+  "Eliminare l'account?": "Delete the account?",
+  "{nome} non potrà più entrare. Non si può annullare.": "{nome} will no longer be able to sign in. This cannot be undone.",
+  "Si cancellano accesso, foto, eventi privati ed eventi che riguardano solo questa persona. Gli eventi pubblicati per la classe restano, firmati «Account eliminato».": "Sign-in, photo, private events and events that concern only this person are erased. Events published for the class remain, signed “Deleted account”.",
+  "Elimina per sempre": "Delete permanently",
+  "non puoi eliminare il tuo account": "you cannot delete your own account"
  }
 }

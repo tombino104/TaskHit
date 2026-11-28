@@ -145,7 +145,7 @@ pub fn load(c: &Connection, id: &str) -> Result<Option<Stored>, ApiError> {
 
 /// Fotografia dei campi che l'Inbox mostra, cosi' resta leggibile anche se l'evento cambia o sparisce.
 pub fn snapshot(d: &Data) -> Value {
-    json!({ "title": d.title, "tag_id": d.tag_id, "label_id": d.label_id, "sub_kind": d.sub_kind, "group_id": d.group_id, "starts_at": d.starts_at })
+    json!({ "title": d.title, "tag_id": d.tag_id, "label_id": d.label_id, "sub_kind": d.sub_kind, "group_id": d.group_id, "starts_at": d.starts_at, "subject_id": d.subject_id })
 }
 
 fn diff(old: &Data, new: &Data) -> Map<String, Value> {

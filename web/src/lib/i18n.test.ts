@@ -10,6 +10,8 @@ const DINAMICI = [
   'La modifica sarà applicata quando {chi} approva.', 'L’evento sarà pubblicato quando {chi} approva.',
   '1 evento; il giorno più pieno è {giorno}.', '{n} eventi; il giorno più pieno è {giorno}.',
   'chiaro', 'scuro',
+  // il nome che il server lascia sugli eventi di un account eliminato
+  'Account eliminato',
   // tipi di evento e modalità creati insieme al database
   'Verifica', 'Verifica di recupero', 'Interrogazione', 'Corso', 'Rientro', 'FSL',
   'teorica', 'pratica', 'scritta', 'recupero', 'scolastico', 'extrascolastico',

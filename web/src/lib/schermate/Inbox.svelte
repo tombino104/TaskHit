@@ -2,7 +2,7 @@
   import { t } from '../i18n';
   import { app, avvisa, leggiTutto, messaggio } from '../store.svelte';
   import { orologio } from '../orologio.svelte';
-  import { colore, metaNotifica, righeModifiche } from '../events';
+  import { colore, nomeSoggetto, metaNotifica, righeModifiche } from '../events';
   import { decideProposte, vedeProposte } from '../lavori';
   import { giornoRelativo, ora } from '../dates';
   import type { Notifica } from '../api';
@@ -78,6 +78,9 @@
             </span>
             <span class="nome">{n.payload.event.title}</span>
             <span class="riga"><i class="quadratino" style:background={colore(app.meta, n.payload.event.tag_id)}></i>{metaNotifica(app.meta, n.payload.event)}</span>
+            {#if nomeSoggetto(app.meta, n.payload.event)}
+              <span class="riga">{t('Per {nome}', { nome: nomeSoggetto(app.meta, n.payload.event) })}</span>
+            {/if}
             {#if riga}
               <span class="differenza">
                 <span class="dato tenue">{riga.campo}</span>

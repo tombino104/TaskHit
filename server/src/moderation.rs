@@ -71,7 +71,7 @@ async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
                 "SELECT u.id, u.display_name, u.role, u.block_kind, u.block_until, u.block_reason, u.block_tags,
                         u.blocked_by_role, u.rename_request IS NOT NULL, a.updated_at
                    FROM users u LEFT JOIN avatars a ON a.user_id = u.id
-                  WHERE u.pending = 0 AND u.role <> 'admin' AND u.id <> ?1 ORDER BY u.display_name COLLATE NOCASE",
+                  WHERE u.pending = 0 AND u.removed_at IS NULL AND u.role <> 'admin' AND u.id <> ?1 ORDER BY u.display_name COLLATE NOCASE",
             )?;
             type Row = (String, String, String, Option<String>, Option<i64>, Option<String>, String, Option<String>, bool, Option<i64>);
             let rows: Vec<Row> = stmt
@@ -131,7 +131,7 @@ async fn sanction(State(st): State<AppState>, user: AuthUser, Path(id): Path<Str
             let tx = c.transaction()?;
             lift_expired(&tx, now())?;
             let (role, by): (String, Option<String>) = tx
-                .query_row("SELECT role, blocked_by_role FROM users WHERE id = ?1 AND pending = 0", params![id], |r| Ok((r.get(0)?, r.get(1)?)))
+                .query_row("SELECT role, blocked_by_role FROM users WHERE id = ?1 AND pending = 0 AND removed_at IS NULL", params![id], |r| Ok((r.get(0)?, r.get(1)?)))
                 .optional()?
                 .ok_or(ApiError::NotFound)?;
             let mine = classes_of(&tx, &user.id)?;

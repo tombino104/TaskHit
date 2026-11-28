@@ -4,6 +4,11 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public retryAfter?: number, public blocco?: Blocco) { super(message); }
 }
 
+/** Il server firma così gli eventi di chi è stato eliminato: è l'unico nome da tradurre. */
+const CAMPI_NOME = ['name', 'display_name', 'actor', 'approver', 'approved_by'];
+const tradotto = (campo: string, valore: unknown): unknown =>
+  valore === 'Account eliminato' && CAMPI_NOME.includes(campo) ? t('Account eliminato') : valore;
+
 /** `keepalive` fa partire la richiesta anche se la pagina si sta chiudendo. */
 async function call<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   let res: Response;
@@ -18,7 +23,7 @@ async function call<T>(method: string, path: string, body?: unknown, keepalive =
   } catch {
     throw new ApiError(0, t('Server non raggiungibile.'));
   }
-  const data = await res.json().catch(() => ({}));
+  const data = await res.text().then((x) => JSON.parse(x, tradotto)).catch(() => ({}));
   if (!res.ok) {
     const retry = Number(res.headers.get('retry-after')) || undefined;
     throw new ApiError(res.status, data?.error ?? t('Errore {n}', { n: res.status }), retry, data?.blocked);
@@ -98,7 +103,9 @@ export type Modifiche = Partial<Record<keyof DatiPubblici, [unknown, unknown]>>;
 export interface VoceStoria { at: number; kind: 'added' | 'modified' | 'deleted'; changes: Modifiche | null; actor: string | null; approver: string | null }
 export type EsitoScrittura = 'published' | 'proposed' | 'saved';
 
-export type Fotografia = Pick<DatiPubblici, 'title' | 'tag_id' | 'label_id' | 'sub_kind' | 'group_id' | 'starts_at'>;
+export type Fotografia = Pick<DatiPubblici, 'title' | 'tag_id' | 'label_id' | 'sub_kind' | 'group_id' | 'starts_at'>
+  /** Assente nelle notifiche salvate prima della 0.8. */
+  & { subject_id?: string | null };
 export type TipoProposta = 'create' | 'update' | 'delete';
 export interface Notifica {
   id: string; kind: 'added' | 'modified' | 'deleted' | 'proposal' | 'decision'; event_id: string | null; at: number; read: boolean;
@@ -181,6 +188,7 @@ export const api = {
   salvaPersona: (userId: string, b: { role?: Ruolo; disabled?: boolean; group_ids?: string[] }) => call<Ok>('PATCH', `/api/users/${id(userId)}`, b),
   accetta: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/accept`, {}),
   rifiuta: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/reject`, {}),
+  eliminaPersona: (userId: string) => call<Ok>('POST', `/api/users/${id(userId)}/delete`, {}),
   creaGruppo: (name: string, kind: Gruppo['kind'], parent_id?: string) => call<{ id: string }>('POST', '/api/groups', { name, kind, parent_id }),
   salvaMembri: (groupId: string, user_ids: string[]) => call<Ok>('PUT', `/api/groups/${id(groupId)}/members`, { user_ids }),
   creaGruppiLavoro: (b: NuoviGruppi) => call<{ ids: string[] }>('POST', '/api/work-groups', b),

@@ -2,11 +2,12 @@
   import { t } from '../i18n';
   import Icona from './Icona.svelte';
   import { app } from '../store.svelte';
-  import { colore, etichettaGruppo, gruppoDi, materiaDi, nomeTipo, riassunto, type Evento } from '../events';
+  import { colore, etichettaGruppo, gruppoDi, materiaDi, nomeSoggetto, nomeTipo, riassunto, type Evento } from '../events';
   import { ora } from '../dates';
 
   let { evento, compatta = false }: { evento: Evento; compatta?: boolean } = $props();
   const materia = $derived(materiaDi(app.meta, evento.tag_id));
+  const soggetto = $derived(nomeSoggetto(app.meta, evento));
 </script>
 
 <a href="#/evento/{evento.id}" class="tinta-materia" class:compatta style:--materia={materia?.color}>
@@ -25,6 +26,9 @@
       {/if}
     </span>
     <span class="nome">{evento.title}</span>
+    {#if soggetto}
+      <span class="chi per"><Icona nome="profilo" size={14} />{t('Per {nome}', { nome: soggetto })}</span>
+    {/if}
     {#if !compatta}
       <span class="chi">
         <Icona nome={evento.privato ? 'lucchetto' : 'globo'} size={14} />
@@ -45,5 +49,6 @@
   .nome { font-family: var(--font-titoli); font-size: 27px; line-height: 1.05; overflow-wrap: anywhere; }
   .compatta .nome { font-size: 23px; line-height: 1.1; }
   .chi { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--inchiostro-2); }
+  .per { color: var(--inchiostro); font-weight: 600; }
   .fine { color: var(--inchiostro-2); }
 </style>

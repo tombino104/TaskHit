@@ -30,6 +30,7 @@ pub fn routes() -> Router<AppState> {
         .route("/users/{id}", patch(update))
         .route("/users/{id}/accept", post(accept))
         .route("/users/{id}/reject", post(reject))
+        .route("/users/{id}/delete", post(remove))
         .route("/groups", post(create_group))
         .route("/groups/{id}/members", put(set_members))
         .route("/invites", get(invites).post(create_invite))
@@ -51,6 +52,7 @@ async fn list(State(st): State<AppState>, user: AuthUser) -> Result<Json<Value>,
             let managed = common::managed_groups(c, &user)?;
             let mut stmt = c.prepare(
                 "SELECT id, username, display_name, role, disabled, pending, pending_group_id, created_at FROM users
+                  WHERE removed_at IS NULL
                   ORDER BY CASE role WHEN 'admin' THEN 0 WHEN 'rappresentante' THEN 1 WHEN 'nerd' THEN 2 ELSE 3 END, display_name COLLATE NOCASE",
             )?;
             type Row = (String, String, String, String, bool, bool, Option<String>, i64);
@@ -94,7 +96,7 @@ async fn update(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
     st.db
         .run(move |c| {
             let tx = c.transaction()?;
-            if !common::exists(&tx, "SELECT 1 FROM users WHERE id = ?1 AND pending = 0", &id)? {
+            if !common::exists(&tx, "SELECT 1 FROM users WHERE id = ?1 AND pending = 0 AND removed_at IS NULL", &id)? {
                 return Err(ApiError::NotFound);
             }
             if let Some(role) = &req.role {
@@ -213,6 +215,80 @@ async fn reject(State(st): State<AppState>, user: AuthUser, Path(id): Path<Strin
         })
         .await?;
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Il nome che resta sugli eventi di chi non c'e' piu'. L'interfaccia lo traduce.
+const REMOVED_NAME: &str = "Account eliminato";
+
+/// L'admin elimina un account, di qualsiasi ruolo, tranne il proprio: cosi' ne resta sempre uno.
+async fn remove(State(st): State<AppState>, user: AuthUser, Path(id): Path<String>) -> Result<Json<Value>, ApiError> {
+    common::require_admin(&user)?;
+    if id == user.id {
+        return Err(ApiError::Forbidden("non puoi eliminare il tuo account"));
+    }
+    st.db
+        .run(move |c| {
+            let tx = c.transaction()?;
+            erase(&tx, &id)?;
+            common::audit(&tx, &user.id, "user_deleted", Some(&id))?;
+            tx.commit()?;
+            Ok(())
+        })
+        .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Cancella accesso e dati personali. Restano gli eventi pubblicati per la classe; spariscono quelli
+/// privati e quelli che riguardano solo questa persona.
+fn erase(c: &Connection, id: &str) -> Result<(), ApiError> {
+    let name: String = c
+        .query_row("SELECT display_name FROM users WHERE id = ?1 AND removed_at IS NULL", params![id], |r| r.get(0))
+        .optional()?
+        .ok_or(ApiError::NotFound)?;
+
+    let about: Vec<(String, String, i64)> = c
+        .prepare("SELECT id, group_id, rev FROM events WHERE subject_id = ?1 AND visibility = 'public'")?
+        .query_map(params![id], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+        .collect::<Result<_, _>>()?;
+    for (event, group, rev) in about {
+        common::log_change(c, "event", &event, "delete", Some(&group), None, rev + 1)?;
+        c.execute("DELETE FROM inbox WHERE event_id = ?1", params![event])?;
+        c.execute("DELETE FROM events WHERE id = ?1", params![event])?;
+    }
+
+    // Proposte fatte da questa persona o che la riguardano: con le relative richieste nell'Inbox.
+    let theirs = "SELECT id FROM proposals WHERE proposed_by = ?1 OR (status = 'pending' AND json_extract(data, '$.subject_id') = ?1)";
+    c.execute(
+        &format!("DELETE FROM inbox WHERE kind = 'proposal' AND json_extract(diff, '$.proposal_id') IN ({theirs})"),
+        params![id],
+    )?;
+    c.execute(&format!("DELETE FROM proposals WHERE id IN ({theirs})"), params![id])?;
+
+    c.execute("UPDATE inbox SET diff = json_set(diff, '$.approver', ?2) WHERE json_extract(diff, '$.approver') = ?1", params![name, REMOVED_NAME])?;
+    for sql in [
+        "DELETE FROM events WHERE owner_id = ?1 AND visibility = 'private'",
+        "DELETE FROM sessions WHERE user_id = ?1",
+        "DELETE FROM inbox WHERE user_id = ?1",
+        "DELETE FROM reminders WHERE user_id = ?1",
+        "DELETE FROM push_subscriptions WHERE user_id = ?1",
+        "DELETE FROM plugin_state WHERE user_id = ?1",
+        "DELETE FROM avatars WHERE user_id = ?1",
+        "DELETE FROM group_members WHERE user_id = ?1",
+    ] {
+        c.execute(sql, params![id])?;
+    }
+    c.execute("UPDATE invites SET revoked_at = ?2 WHERE created_by = ?1 AND revoked_at IS NULL", params![id, now()])?;
+    drop_orphan_memberships(c)?;
+    // La riga resta, vuota: il nome torna libero e con queste chiavi non entra nessuno.
+    c.execute(
+        "UPDATE users SET username = 'eliminato:' || id, display_name = ?2, first_name = NULL, last_name = NULL, role = 'alunno',
+                auth_hash = '', kdf_salt = '', wrapped_key = '', recovery_wrapped_key = NULL, profile_blob = NULL,
+                rename_request = NULL, pending = 0, pending_group_id = NULL, disabled = 1,
+                block_kind = NULL, block_until = NULL, block_reason = NULL, block_tags = '', blocked_by_role = NULL,
+                removed_at = ?3, updated_at = ?3 WHERE id = ?1",
+        params![id, REMOVED_NAME, now()],
+    )?;
+    Ok(())
 }
 
 #[derive(Deserialize)]

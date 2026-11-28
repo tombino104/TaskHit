@@ -17,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/004_gruppi_della_classe.sql"),
     include_str!("../migrations/005_gruppi_di_lavoro.sql"),
     include_str!("../migrations/006_nomi_foto_moderazione.sql"),
+    include_str!("../migrations/007_account_eliminati.sql"),
 ];
 
 /// Versione dello schema che questa build conosce.

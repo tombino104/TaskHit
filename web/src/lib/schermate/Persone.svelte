@@ -86,6 +86,17 @@
     scelta = null;
   }
 
+  // --- Eliminazione ---
+  let daEliminare = $state<Persona | null>(null);
+  let eliminando = $state(false);
+  function chiediElimina(p: Persona) { daEliminare = p; scelta = null; }
+  async function elimina() {
+    const p = daEliminare!;
+    eliminando = true;
+    if (await esegui(() => api.eliminaPersona(p.id), t('Account di {nome} eliminato.', { nome: p.display_name }))) daEliminare = null;
+    eliminando = false;
+  }
+
   // --- Gruppi e inviti ---
   let nuovoGruppo = $state(false);
   // Membri di un gruppo interno a una classe (rappresentante).
@@ -241,7 +252,17 @@
     <button type="button" class="pulsante pieno grande" onclick={salva}>{t('Salva')}</button>
     {#if !io}
       <button type="button" class="pulsante" onclick={() => modera(scelta!)}>{t('Sospendi, espelli, nome o foto…')}</button>
+      {#if admin}<button type="button" class="collegamento elimina" onclick={() => chiediElimina(scelta!)}>{t('Elimina account…')}</button>{/if}
     {/if}
+  </Foglio>
+{/if}
+
+{#if daEliminare}
+  <Foglio titolo={t('Eliminare l\'account?')} onclose={() => (daEliminare = null)}>
+    <p>{t('{nome} non potrà più entrare. Non si può annullare.', { nome: daEliminare.display_name })}</p>
+    <p class="nota">{t('Si cancellano accesso, foto, eventi privati ed eventi che riguardano solo questa persona. Gli eventi pubblicati per la classe restano, firmati «Account eliminato».')}</p>
+    <button type="button" class="pulsante pieno grande" disabled={eliminando || !app.online} aria-busy={eliminando} onclick={elimina}>{t('Elimina per sempre')}</button>
+    <button type="button" class="pulsante" onclick={() => (daEliminare = null)}>{t('Annulla')}</button>
   </Foglio>
 {/if}
 
@@ -292,5 +313,6 @@
   .si { background: var(--inchiostro); color: var(--sfondo); }
   legend { padding: 0 0 10px; }
   .spiega { padding-top: 10px; }
+  .elimina { align-self: center; color: var(--accento); }
   .spunta { display: flex; align-items: center; gap: 10px; min-height: 44px; border-bottom: 1px solid var(--filetto); }
 </style>

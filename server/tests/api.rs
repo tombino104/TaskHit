@@ -1219,3 +1219,61 @@ async fn automatic_backups_run_once_per_slot_keep_the_newest_and_are_copied_outs
     assert_eq!(list["next"], Value::Null, "spenti: nessun prossimo orario");
     assert_eq!(list["copy"]["latest_copied"], json!(true));
 }
+
+// --- Eliminazione degli account ---
+
+#[tokio::test]
+async fn the_admin_deletes_accounts_and_class_events_stay() {
+    let c = Classe::nuova().await;
+    let (rid, rap) = c.iscrivi("giulia", "rappresentante", 2).await;
+    let (aid, anna) = c.iscrivi("anna", "alunno", 3).await;
+    let (nid, nerd) = c.iscrivi("nico", "nerd", 4).await;
+
+    // Un evento per la classe, uno che riguarda solo Anna, uno privato di Anna, una proposta di Nico.
+    assert_eq!(c.post("/api/events", c.evento("Limiti"), &rap).await.0, StatusCode::OK);
+    let mut recupero = c.evento("Recupero");
+    recupero["data"]["subject_id"] = json!(aid);
+    assert_eq!(c.post("/api/events", recupero, &rap).await.0, StatusCode::OK);
+    assert_eq!(c.eventi(&nerd).await.len(), 2, "l'evento per una persona lo vede tutta la classe");
+    let (_, inbox) = c.get("/api/inbox", &nerd).await;
+    assert!(inbox["items"].as_array().unwrap().iter().any(|i| i["payload"]["event"]["subject_id"] == aid.as_str()));
+    let privato = json!({"visibility":"private","id":"0123456789abcdef0123456789abcdef","payload":B64.encode([1u8; 40])});
+    assert_eq!(c.post("/api/events", privato, &anna).await.0, StatusCode::OK);
+    assert_eq!(c.post("/api/events", c.evento("Proposta"), &nerd).await.0, StatusCode::OK);
+
+    // Solo l'admin elimina, e non se stesso.
+    let del = |id: &str| format!("/api/users/{id}/delete");
+    assert_eq!(c.post(&del(&aid), json!({}), &rap).await.0, StatusCode::FORBIDDEN);
+    let (_, me) = c.get("/api/me", &c.admin).await;
+    assert_eq!(c.post(&del(me["id"].as_str().unwrap()), json!({}), &c.admin).await.0, StatusCode::FORBIDDEN);
+
+    for id in [&aid, &nid, &rid] {
+        let (s, b) = c.post(&del(id), json!({}), &c.admin).await;
+        assert_eq!(s, StatusCode::OK, "{b}");
+    }
+    assert_eq!(c.post(&del(&aid), json!({}), &c.admin).await.0, StatusCode::NOT_FOUND);
+    for cookie in [&anna, &nerd, &rap] {
+        assert_eq!(c.get("/api/me", cookie).await.0, StatusCode::UNAUTHORIZED);
+    }
+    let (_, list) = c.get("/api/users", &c.admin).await;
+    assert_eq!(list["users"].as_array().unwrap().len(), 1);
+    assert_eq!(c.get("/api/moderation", &c.admin).await.1["users"], json!([]));
+    let (s, _) = c.post(&format!("/api/users/{aid}/sanction"), json!({"action":"riattiva"}), &c.admin).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _, _) = send(&c.app, Method::PATCH, &format!("/api/users/{aid}"), Some(json!({"disabled":false})), &[("cookie", &c.admin)]).await;
+    assert_eq!(s, StatusCode::NOT_FOUND);
+    let (s, _, _) = send(&c.app, Method::POST, "/api/auth/login", Some(json!({"username":"anna prova","auth_key":key(3)})), &[]).await;
+    assert_eq!(s, StatusCode::UNAUTHORIZED);
+
+    // Il nome torna libero; chi entra vede l'evento della classe, firmato da un account eliminato.
+    let (_, nuova) = c.iscrivi("anna", "rappresentante", 7).await;
+    let seen = c.eventi(&nuova).await;
+    assert_eq!(seen.len(), 1, "{seen:?}");
+    assert_eq!(seen[0]["data"]["title"], "Limiti");
+    assert_eq!(seen[0]["created_by"]["name"], "Account eliminato");
+    assert_eq!(c.get("/api/proposals", &nuova).await.1["proposals"], json!([]));
+
+    // Si elimina anche un altro admin.
+    let (bid, _) = c.iscrivi("bis", "admin", 8).await;
+    assert_eq!(c.post(&del(&bid), json!({}), &c.admin).await.0, StatusCode::OK);
+}

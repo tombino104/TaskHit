@@ -27,6 +27,7 @@
 - **Inbox** con aggiunte, modifiche ed eliminazioni degli eventi pubblici.
 - Si entra con **nome, cognome e password**; foto profilo visibile ai compagni.
 - **Moderazione**: sospensione (anche a tempo), espulsione e richiesta di cambiare nome, con motivo.
+- **Eliminazione account**: solo l'admin. Si cancellano i dati personali; gli eventi pubblicati per la classe restano.
 - **Classi, gruppi e inviti** con conferma dell'amministratore o di un rappresentante.
 - **Gruppi di lavoro** temporanei (al massimo 90 giorni), composti dai rappresentanti trascinando i nomi: ognuno ha un capogruppo e i suoi eventi li vedono solo i membri.
 - **Temi** in un singolo file JSON, chiari e scuri.

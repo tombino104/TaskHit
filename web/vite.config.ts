@@ -1,8 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { VitePWA } from 'vite-plugin-pwa';
+import pacchetto from './package.json' with { type: 'json' };
 
 export default defineConfig({
+  // La versione mostrata nel profilo è quella con cui è stata costruita l’interfaccia.
+  define: { __VERSIONE__: JSON.stringify(pacchetto.version) },
   plugins: [
     svelte(),
     VitePWA({
